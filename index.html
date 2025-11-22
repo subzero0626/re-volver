@@ -1314,23 +1314,37 @@
             const distance = Math.sqrt(dxToPlayer * dxToPlayer + dyToPlayer * dyToPlayer);
             const safeDistance = 500; // 안전 거리 (500px)
 
-            // 적 이동 패턴 개선 (안전 거리 유지)
-            if (enemy.aiTimer > 60) { // 더 자주 방향 변경
+            // 적 이동 패턴 개선 - 항상 활발하게 움직임
+            if (enemy.aiTimer > 30) { // 더 자주 방향 변경 (30프레임 = 약 0.5초)
                 let targetAngle;
                 
-                if (distance < safeDistance) {
-                    // 플레이어가 너무 가까우면 멀어지는 방향으로 이동
-                    targetAngle = Math.atan2(-dyToPlayer, -dxToPlayer); // 플레이어 반대 방향
-                } else if (distance > safeDistance * 1.5) {
-                    // 플레이어가 너무 멀면 다가가는 방향으로 이동
-                    targetAngle = Math.atan2(dyToPlayer, dxToPlayer); // 플레이어 방향
+                // 랜덤하게 다양한 움직임 패턴 사용
+                const movementPattern = Math.random();
+                
+                if (movementPattern < 0.3) {
+                    // 30% 확률: 플레이어 방향으로 이동
+                    targetAngle = Math.atan2(dyToPlayer, dxToPlayer);
+                } else if (movementPattern < 0.5) {
+                    // 20% 확률: 플레이어 반대 방향으로 이동
+                    targetAngle = Math.atan2(-dyToPlayer, -dxToPlayer);
+                } else if (movementPattern < 0.7) {
+                    // 20% 확률: 측면 이동 (왼쪽/오른쪽)
+                    targetAngle = Math.atan2(dyToPlayer, dxToPlayer) + (Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2);
                 } else {
-                    // 안전 거리 범위 내에서는 측면 이동
-                    targetAngle = Math.atan2(dyToPlayer, dxToPlayer) + Math.PI / 2; // 90도 회전
+                    // 30% 확률: 완전 랜덤 방향
+                    targetAngle = Math.random() * Math.PI * 2;
                 }
                 
-                // 약간의 랜덤 각도 추가
-                const randomAngle = (Math.random() - 0.5) * Math.PI * 0.3; // ±27도 랜덤
+                // 거리 기반 조정 (선택적)
+                if (distance < safeDistance * 0.7) {
+                    // 너무 가까우면 멀어지는 경향
+                    if (movementPattern < 0.5) {
+                        targetAngle = Math.atan2(-dyToPlayer, -dxToPlayer);
+                    }
+                }
+                
+                // 랜덤 각도 추가로 더 자연스러운 움직임
+                const randomAngle = (Math.random() - 0.5) * Math.PI * 0.5; // ±45도 랜덤
                 enemy.aiDirection = targetAngle + randomAngle;
                 enemy.aiTimer = 0;
             }
