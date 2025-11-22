@@ -1,0 +1,21 @@
+{
+  "name": "revolver-duel-server",
+  "version": "1.0.0",
+  "description": "리볼버 듀얼 게임 WebSocket 서버",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "websocket",
+    "game",
+    "multiplayer"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.14.2"
+  }
+}
+
