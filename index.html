@@ -1,2 +1,1584 @@
-# re-volver
-...
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>리볼버 듀얼</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background: #0f0f1e;
+            color: #fff;
+        }
+
+        #gameContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            background: #0f0f1e;
+        }
+
+
+        #augmentModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 15, 30, 0.95);
+            border: 3px solid #e94560;
+            border-radius: 15px;
+            padding: 30px;
+            z-index: 1000;
+            max-width: 600px;
+            width: 90%;
+        }
+
+        #augmentModal h2 {
+            color: #e94560;
+            margin-bottom: 20px;
+        }
+
+        .augment-option {
+            background: rgba(233, 69, 96, 0.2);
+            border: 2px solid #e94560;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .augment-option:hover {
+            background: rgba(233, 69, 96, 0.4);
+            transform: scale(1.05);
+        }
+
+        .augment-option h4 {
+            color: #ffc107;
+            margin-bottom: 5px;
+        }
+
+        #gameOverModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 15, 30, 0.95);
+            border: 3px solid #ffc107;
+            border-radius: 15px;
+            padding: 40px;
+            z-index: 1001;
+            text-align: center;
+        }
+
+        #gameOverModal h2 {
+            color: #ffc107;
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #c7364d;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="augmentModal">
+            <h2>증강 선택</h2>
+            <p style="margin-bottom: 20px;">패배하셨습니다. 증강을 선택하세요:</p>
+            <div id="enemySelection" style="margin-bottom: 20px; padding: 10px; background: rgba(233, 69, 96, 0.2); border-radius: 5px; display: none;">
+                <p style="color: #e94560; margin: 0;">상대가 선택 중...</p>
+            </div>
+            <div id="augmentOptions"></div>
+        </div>
+
+        <div id="gameOverModal">
+            <h2 id="gameOverTitle">게임 종료</h2>
+            <p id="gameOverMessage" style="font-size: 20px; margin-bottom: 20px;"></p>
+            <button onclick="restartGame()">다시 시작</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 캔버스 크기를 화면 전체로 설정
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // 게임 상태
+        let gameState = {
+            round: 1,
+            maxRounds: 7, // 7판
+            playerWins: 0,
+            enemyWins: 0,
+            winsNeeded: 4, // 4선제
+            gameTime: 180, // 3분 = 180초
+            isGameOver: false,
+            isPaused: false,
+            roundWins: [], // 각 라운드의 승자 기록 ('player' 또는 'enemy')
+            countdown: 3, // 라운드 시작 카운트다운
+            augmentCountdown: 0, // 증강 선택 카운트다운 (0이면 표시 안함)
+            shake: {
+                intensity: 0,
+                duration: 0
+            }
+        };
+        
+        // 첫 라운드 카운트다운 시작
+        gameState.isPaused = true;
+        const initialCountdown = setInterval(() => {
+            gameState.countdown--;
+            if (gameState.countdown <= 0) {
+                clearInterval(initialCountdown);
+                gameState.isPaused = false;
+            }
+        }, 1000);
+
+        // 플레이어
+        const player = {
+            x: canvas.width * 0.2,
+            y: canvas.height * 0.5,
+            radius: 30, // 1.5배 증가 (20 -> 30)
+            speed: 3,
+            health: 5,
+            maxHealth: 5,
+            ammo: 6,
+            maxAmmo: 6,
+            reloadTime: 3000, // 3초
+            isReloading: false,
+            reloadStartTime: 0, // 재장전 시작 시간
+            angle: 0,
+            color: '#4a9eff',
+            bullets: [],
+            lastShot: 0,
+            shootCooldown: 1000, // 1초로 고정
+            augmentations: [],
+            // 증강 관련 상태
+            bulletSpeedMultiplier: 1,
+            hasCritical: false,
+            hasDoubleShot: false,
+            hasDodge: false,
+            hasRevive: false,
+            hasRevived: false, // 부활 사용 여부 (1번만 부활)
+            hasDeepWound: false,
+            isDodging: false,
+            dodgeStartTime: 0, // 구르기 시작 시간
+            dodgeEndTime: 0,
+            dodgeStartX: 0,
+            dodgeStartY: 0,
+            dodgeTargetX: 0,
+            dodgeTargetY: 0,
+            dodgeTrail: [], // 구르기 잔상 위치 배열
+            lastDodgeTime: 0, // 마지막 구르기 시간 (쿨타임용)
+            isReviving: false,
+            reviveTime: 0,
+            isInvincible: false,
+            invincibleEndTime: 0,
+            slowEndTime: 0
+        };
+
+        // 적 (AI)
+        const enemy = {
+            x: canvas.width * 0.8,
+            y: canvas.height * 0.5,
+            radius: 30, // 1.5배 증가 (20 -> 30)
+            speed: 2.5,
+            health: 5,
+            maxHealth: 5,
+            ammo: 6,
+            maxAmmo: 6,
+            reloadTime: 3000, // 3초
+            isReloading: false,
+            reloadStartTime: 0, // 재장전 시작 시간
+            angle: Math.PI,
+            color: '#e94560',
+            bullets: [],
+            lastShot: 0,
+            shootCooldown: 1000, // 1초로 고정
+            augmentations: [],
+            // 증강 관련 상태
+            bulletSpeedMultiplier: 1,
+            hasCritical: false,
+            hasDoubleShot: false,
+            hasDodge: false,
+            hasRevive: false,
+            hasRevived: false, // 부활 사용 여부 (1번만 부활)
+            hasDeepWound: false,
+            isDodging: false,
+            dodgeStartTime: 0, // 구르기 시작 시간
+            dodgeEndTime: 0,
+            dodgeStartX: 0,
+            dodgeStartY: 0,
+            dodgeTargetX: 0,
+            dodgeTargetY: 0,
+            dodgeTrail: [], // 구르기 잔상 위치 배열
+            lastDodgeTime: 0, // 마지막 구르기 시간 (쿨타임용)
+            isReviving: false,
+            reviveTime: 0,
+            isInvincible: false,
+            invincibleEndTime: 0,
+            slowEndTime: 0,
+            aiTimer: 0,
+            aiDirection: Math.random() * Math.PI * 2
+        };
+
+        // 증강 목록
+        const augmentations = [
+            { 
+                id: 'health', 
+                name: '최대체력 +1', 
+                description: '최대 체력 +1', 
+                effect: (character) => { 
+                    character.maxHealth += 1; 
+                    character.health += 1; 
+                } 
+            },
+            { 
+                id: 'speed', 
+                name: '이동속도 +25%', 
+                description: '이동 속도 +25%', 
+                effect: (character) => { 
+                    character.speed *= 1.25; 
+                } 
+            },
+            { 
+                id: 'bulletSpeed', 
+                name: '총알 속도 +25%', 
+                description: '총알 속도 +25%', 
+                effect: (character) => { 
+                    character.bulletSpeedMultiplier = (character.bulletSpeedMultiplier || 1) * 1.25; 
+                } 
+            },
+            { 
+                id: 'ammo', 
+                name: '탄약 +1', 
+                description: '최대 탄약 +1', 
+                effect: (character) => { 
+                    character.maxAmmo += 1; 
+                    character.ammo += 1; 
+                } 
+            },
+            { 
+                id: 'fireRate', 
+                name: '발사 쿨다운 -25%', 
+                description: '발사 쿨다운 -25%', 
+                effect: (character) => { 
+                    character.shootCooldown *= 0.75; 
+                } 
+            },
+            { 
+                id: 'reload', 
+                name: '재장전 속도 -1초', 
+                description: '재장전 시간 -1초', 
+                effect: (character) => { 
+                    character.reloadTime = Math.max(1000, character.reloadTime - 1000); 
+                } 
+            },
+            { 
+                id: 'critical', 
+                name: '크리티컬', 
+                description: '피격 시 25% 확률로 데미지 2배', 
+                effect: (character) => { 
+                    character.hasCritical = true; 
+                } 
+            },
+            { 
+                id: 'doubleShot', 
+                name: '더블샷', 
+                description: '발사 시 25% 확률로 추가 발사 (탄약 소모X)', 
+                effect: (character) => { 
+                    character.hasDoubleShot = true; 
+                } 
+            },
+            { 
+                id: 'dodge', 
+                name: '구르기', 
+                description: '우클릭으로 구르기 (구르는 동안 무적)', 
+                effect: (character) => { 
+                    character.hasDodge = true; 
+                } 
+            },
+            { 
+                id: 'revive', 
+                name: '부활', 
+                description: '죽었을 때 2초 후 체력 1로 부활 (2초 무적)', 
+                effect: (character) => { 
+                    character.hasRevive = true; 
+                } 
+            },
+            { 
+                id: 'deepWound', 
+                name: '깊은 상처', 
+                description: '피격 시 상대 이동속도 -10% (0.3초)', 
+                effect: (character) => { 
+                    character.hasDeepWound = true; 
+                } 
+            },
+        ];
+
+        // 키 입력 상태
+        const keys = {};
+        let mouse = { x: 0, y: 0 };
+
+        // 이벤트 리스너
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === 'r' || e.key === 'R') {
+                reload(player);
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = (e.clientX - rect.left) * (canvas.width / rect.width);
+            mouse.y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (!gameState.isPaused && !gameState.isGameOver && !player.isDodging) {
+                shoot(player);
+            }
+        });
+
+        canvas.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // 우클릭 메뉴 방지
+            // 구르기 (우클릭)
+            if (player.hasDodge && !player.isDodging && !gameState.isPaused && !gameState.isGameOver) {
+                dodge(player);
+            }
+        });
+
+        // 총알 클래스
+        class Bullet {
+            constructor(x, y, angle, owner, isFreeShot = false) {
+                this.x = x;
+                this.y = y;
+                this.angle = angle;
+                const baseSpeed = 20;
+                const speedMultiplier = owner.bulletSpeedMultiplier || 1;
+                this.speed = baseSpeed * speedMultiplier;
+                this.radius = 9;
+                this.owner = owner;
+                this.damage = 1;
+                this.isFreeShot = isFreeShot; // 탄약 소모 없는 총알 (더블샷용)
+            }
+
+            update() {
+                this.x += Math.cos(this.angle) * this.speed;
+                this.y += Math.sin(this.angle) * this.speed;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.angle);
+                
+                // 직사각형 총알 그리기
+                ctx.fillStyle = this.owner === player ? '#ffc107' : '#ff006e';
+                const bulletWidth = 24; // 총알 너비 (살짝 늘림: 18 -> 24)
+                const bulletHeight = 9; // 총알 높이
+                ctx.fillRect(-bulletWidth / 2, -bulletHeight / 2, bulletWidth, bulletHeight);
+                
+                ctx.restore();
+            }
+
+            isOutOfBounds() {
+                return this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height;
+            }
+        }
+
+        // 화면 흔들림 함수
+        function addScreenShake(intensity, duration) {
+            gameState.shake.intensity = intensity;
+            gameState.shake.duration = duration;
+        }
+
+        // 발사 함수
+        function shoot(character) {
+            const now = Date.now();
+            if (character.ammo > 0 && !character.isReloading && 
+                now - character.lastShot > character.shootCooldown) {
+                
+                const bullet = new Bullet(
+                    character.x + Math.cos(character.angle) * character.radius,
+                    character.y + Math.sin(character.angle) * character.radius,
+                    character.angle,
+                    character,
+                    false
+                );
+                character.bullets.push(bullet);
+                character.ammo--;
+                character.lastShot = now;
+
+                // 더블샷 (25% 확률로 발사한 방향에 ±15도 사이에 추가 한발 발사)
+                if (character.hasDoubleShot && Math.random() < 0.25) {
+                    // ±15도 사이의 랜덤 각도
+                    const randomAngle = (Math.random() - 0.5) * (Math.PI * 30 / 180); // -15도 ~ +15도
+                    const doubleBullet = new Bullet(
+                        character.x + Math.cos(character.angle) * character.radius,
+                        character.y + Math.sin(character.angle) * character.radius,
+                        character.angle + randomAngle,
+                        character,
+                        true // 탄약 소모 없음
+                    );
+                    character.bullets.push(doubleBullet);
+                }
+
+                // 화면 흔들림 효과 (플레이어 발사 시에만)
+                if (character === player) {
+                    addScreenShake(12, 200);
+                }
+
+                // 자동 재장전
+                if (character.ammo === 0 && !character.isReloading) {
+                    reload(character);
+                }
+            }
+        }
+
+        // 재장전 함수
+        function reload(character) {
+            if (character.ammo < character.maxAmmo && !character.isReloading) {
+                character.isReloading = true;
+                character.reloadStartTime = Date.now();
+                setTimeout(() => {
+                    character.ammo = character.maxAmmo;
+                    character.isReloading = false;
+                    character.reloadStartTime = 0;
+                }, character.reloadTime);
+            }
+        }
+
+        // 충돌 감지
+        function checkCollision(bullet, target) {
+            const dx = bullet.x - target.x;
+            const dy = bullet.y - target.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            return distance < bullet.radius + target.radius;
+        }
+
+        // 구르기 함수
+        function dodge(character) {
+            const now = Date.now();
+            // 쿨타임 체크 (3초)
+            if (character.isDodging || now - character.lastDodgeTime < 3000) return;
+            
+            character.isDodging = true;
+            const dodgeDistance = character.radius * 6.4; // 플레이어 크기의 3.2배 (20% 감소: 8 -> 6.4)
+            const dodgeDuration = 300; // 0.3초
+            character.dodgeStartTime = now; // 구르기 시작 시간
+            character.dodgeEndTime = now + dodgeDuration;
+            character.lastDodgeTime = now; // 쿨타임 시작
+            character.dodgeTrail = []; // 잔상 초기화
+            
+            // 구르기 시작 위치 저장
+            character.dodgeStartX = character.x;
+            character.dodgeStartY = character.y;
+            character.dodgeTrail.push({ x: character.x, y: character.y, alpha: 0.5 });
+            
+            // 구르기 목표 위치 계산
+            const targetX = character.x + Math.cos(character.angle) * dodgeDistance;
+            const targetY = character.y + Math.sin(character.angle) * dodgeDistance;
+            
+            // 경계 체크
+            character.dodgeTargetX = Math.max(character.radius, Math.min(canvas.width - character.radius, targetX));
+            character.dodgeTargetY = Math.max(character.radius, Math.min(canvas.height - character.radius, targetY));
+        }
+
+        // 플레이어 이동
+        function updatePlayer() {
+            const now = Date.now();
+            
+            // 구르기 상태 체크
+            if (player.isDodging) {
+                if (now >= player.dodgeEndTime) {
+                    // 구르기 완료
+                    player.x = player.dodgeTargetX;
+                    player.y = player.dodgeTargetY;
+                    player.isDodging = false;
+                    player.dodgeTrail = [];
+                } else {
+                    // 구르는 동안 빠른 속도로 이동
+                    const elapsed = now - player.dodgeStartTime; // 시작 시간으로부터의 경과 시간
+                    const progress = Math.min(elapsed / 300, 1); // 0~1 (300ms = 0.3초)
+                    
+                    // 시작 위치에서 목표 위치로 선형 보간
+                    player.x = player.dodgeStartX + (player.dodgeTargetX - player.dodgeStartX) * progress;
+                    player.y = player.dodgeStartY + (player.dodgeTargetY - player.dodgeStartY) * progress;
+                    
+                    // 잔상 업데이트 (매 프레임마다)
+                    if (!player.dodgeTrail) player.dodgeTrail = [];
+                    player.dodgeTrail.push({ x: player.x, y: player.y, alpha: 0.3 });
+                    // 잔상이 너무 많아지면 제거
+                    if (player.dodgeTrail.length > 5) {
+                        player.dodgeTrail.shift();
+                    }
+                }
+                return; // 구르는 중에는 일반 이동 불가
+            }
+
+            // 부활 처리
+            if (player.isReviving) {
+                if (now >= player.reviveTime) {
+                    player.isReviving = false;
+                    player.health = 1;
+                    player.isInvincible = true;
+                    player.invincibleEndTime = now + 2000; // 2초 무적
+                }
+                return; // 부활 중에는 이동 불가
+            }
+
+            // 무적 상태 체크
+            if (player.isInvincible && now >= player.invincibleEndTime) {
+                player.isInvincible = false;
+            }
+
+            // 이동속도 감소 처리 (깊은 상처)
+            let currentSpeed = player.speed;
+            if (now < player.slowEndTime) {
+                currentSpeed *= 0.85; // -15%
+            }
+
+            let dx = 0;
+            let dy = 0;
+
+            if (keys['w']) dy -= 1;
+            if (keys['s']) dy += 1;
+            if (keys['a']) dx -= 1;
+            if (keys['d']) dx += 1;
+
+            // 대각선 이동 정규화
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.707;
+                dy *= 0.707;
+            }
+
+            // 이동
+            const newX = player.x + dx * currentSpeed;
+            const newY = player.y + dy * currentSpeed;
+
+            // 경계 체크
+            if (newX >= player.radius && newX <= canvas.width - player.radius) {
+                player.x = newX;
+            }
+            if (newY >= player.radius && newY <= canvas.height - player.radius) {
+                player.y = newY;
+            }
+
+            // 각도 계산 (마우스 방향)
+            player.angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+        }
+
+        // AI 적 업데이트
+        function updateEnemy() {
+            const now = Date.now();
+            
+            // 부활 처리
+            if (enemy.isReviving) {
+                if (now >= enemy.reviveTime) {
+                    enemy.isReviving = false;
+                    enemy.health = 1;
+                    enemy.isInvincible = true;
+                    enemy.invincibleEndTime = now + 2000; // 2초 무적
+                }
+                return; // 부활 중에는 이동 불가
+            }
+
+            // 무적 상태 체크
+            if (enemy.isInvincible && now >= enemy.invincibleEndTime) {
+                enemy.isInvincible = false;
+            }
+
+            // 이동속도 감소 처리 (깊은 상처)
+            let currentSpeed = enemy.speed;
+            if (now < enemy.slowEndTime) {
+                currentSpeed *= 0.85; // -15%
+            }
+
+            enemy.aiTimer++;
+
+            // 플레이어 방향으로 각도 설정
+            const dxToPlayer = player.x - enemy.x;
+            const dyToPlayer = player.y - enemy.y;
+            enemy.angle = Math.atan2(dyToPlayer, dxToPlayer);
+
+            // 플레이어와의 거리 계산
+            const distance = Math.sqrt(dxToPlayer * dxToPlayer + dyToPlayer * dyToPlayer);
+            const safeDistance = 500; // 안전 거리 (500px)
+
+            // 적 이동 패턴 개선 (안전 거리 유지)
+            if (enemy.aiTimer > 60) { // 더 자주 방향 변경
+                let targetAngle;
+                
+                if (distance < safeDistance) {
+                    // 플레이어가 너무 가까우면 멀어지는 방향으로 이동
+                    targetAngle = Math.atan2(-dyToPlayer, -dxToPlayer); // 플레이어 반대 방향
+                } else if (distance > safeDistance * 1.5) {
+                    // 플레이어가 너무 멀면 다가가는 방향으로 이동
+                    targetAngle = Math.atan2(dyToPlayer, dxToPlayer); // 플레이어 방향
+                } else {
+                    // 안전 거리 범위 내에서는 측면 이동
+                    targetAngle = Math.atan2(dyToPlayer, dxToPlayer) + Math.PI / 2; // 90도 회전
+                }
+                
+                // 약간의 랜덤 각도 추가
+                const randomAngle = (Math.random() - 0.5) * Math.PI * 0.3; // ±27도 랜덤
+                enemy.aiDirection = targetAngle + randomAngle;
+                enemy.aiTimer = 0;
+            }
+
+            // 경계에 닿으면 방향 변경
+            if (enemy.x < enemy.radius || enemy.x > canvas.width - enemy.radius ||
+                enemy.y < enemy.radius || enemy.y > canvas.height - enemy.radius) {
+                enemy.aiDirection = Math.random() * Math.PI * 2;
+                enemy.aiTimer = 0;
+            }
+
+            // 이동
+            let dx = Math.cos(enemy.aiDirection) * currentSpeed;
+            let dy = Math.sin(enemy.aiDirection) * currentSpeed;
+
+            enemy.x = Math.max(enemy.radius, Math.min(canvas.width - enemy.radius, enemy.x + dx));
+            enemy.y = Math.max(enemy.radius, Math.min(canvas.height - enemy.radius, enemy.y + dy));
+
+            // 플레이어가 범위 내에 있고 탄약이 있으면 발사 (더 공격적으로)
+            // 거리 제한을 크게 늘리고 발사 확률도 높임
+            const maxDistance = Math.max(canvas.width, canvas.height) * 0.8; // 화면 크기의 80%까지
+            if (distance < maxDistance && enemy.ammo > 0 && !enemy.isReloading && Math.random() < 0.05) {
+                shoot(enemy);
+            }
+
+            // 자동 재장전
+            if (enemy.ammo === 0 && !enemy.isReloading) {
+                reload(enemy);
+            }
+        }
+
+        // 총알 업데이트
+        function updateBullets(character) {
+            for (let i = character.bullets.length - 1; i >= 0; i--) {
+                const bullet = character.bullets[i];
+                bullet.update();
+
+                // 경계 체크
+                if (bullet.isOutOfBounds()) {
+                    character.bullets.splice(i, 1);
+                    continue;
+                }
+
+                // 충돌 체크
+                const target = character === player ? enemy : player;
+                if (checkCollision(bullet, target)) {
+                    // 구르는 중이거나 무적 상태면 데미지 무시
+                    if (target.isDodging || target.isInvincible || target.isReviving) {
+                        character.bullets.splice(i, 1);
+                        continue;
+                    }
+
+                    // 크리티컬 계산 (25% 확률로 데미지 2배)
+                    let finalDamage = bullet.damage;
+                    if (character.hasCritical && Math.random() < 0.25) {
+                        finalDamage *= 2;
+                    }
+
+                    target.health -= finalDamage;
+                    character.bullets.splice(i, 1);
+
+                    // 깊은 상처 (피격 시 상대 이동속도 -15% (0.5초))
+                    if (character.hasDeepWound) {
+                        target.slowEndTime = Date.now() + 500;
+                    }
+
+                    if (target.health <= 0) {
+                        target.health = 0;
+                        
+                        // 부활 체크 (1번만 부활)
+                        if (target.hasRevive && !target.hasRevived && !target.isReviving) {
+                            target.hasRevived = true; // 부활 사용 표시
+                            target.isReviving = true;
+                            target.reviveTime = Date.now() + 2000;
+                        } else {
+                            endRound(character === player ? 'player' : 'enemy');
+                        }
+                    }
+                    // 체력이 음수가 되지 않도록
+                    if (target.health < 0) target.health = 0;
+                }
+            }
+        }
+
+        // 라운드 종료
+        function endRound(winner) {
+            gameState.isPaused = true;
+
+            // 라운드 승리 기록에 추가 (순서대로)
+            gameState.roundWins.push(winner);
+
+            if (winner === 'player') {
+                gameState.playerWins++;
+            } else {
+                gameState.enemyWins++;
+            }
+
+            // 승리 체크
+            if (gameState.playerWins >= gameState.winsNeeded || gameState.enemyWins >= gameState.winsNeeded) {
+                endGame(winner === 'player' ? 'player' : 'enemy');
+                return;
+            }
+
+            // 라운드 종료 체크
+            if (gameState.round >= gameState.maxRounds) {
+                endGame(gameState.playerWins > gameState.enemyWins ? 'player' : 'enemy');
+                return;
+            }
+
+            // 패배자가 증강 선택 (항상 양쪽 모두 선택)
+            showAugmentModal(player);
+            selectAugmentForEnemy();
+        }
+
+        // 적을 위한 증강 자동 선택
+        function selectAugmentForEnemy() {
+            const enemySelectionDiv = document.getElementById('enemySelection');
+            enemySelectionDiv.style.display = 'block';
+            enemySelectionDiv.innerHTML = '<p style="color: #e94560; margin: 0;">상대가 선택 중...</p>';
+            
+            // 3초 대기 후 선택
+            setTimeout(() => {
+                const shuffled = [...augmentations].sort(() => Math.random() - 0.5);
+                const selectedAugment = shuffled[0]; // 랜덤으로 하나 선택
+                selectedAugment.effect(enemy);
+                enemy.augmentations.push(selectedAugment);
+                
+                // 선택한 증강 표시
+                enemySelectionDiv.innerHTML = `<p style="color: #e94560; margin: 0;">상대 선택: <strong style="color: #ffc107;">${selectedAugment.name}</strong></p>`;
+            }, 3000);
+        }
+
+        // 증강 모달 표시 (플레이어용)
+        function showAugmentModal(character) {
+            const modal = document.getElementById('augmentModal');
+            const optionsDiv = document.getElementById('augmentOptions');
+            optionsDiv.innerHTML = '';
+
+            // 랜덤 증강 3개 선택
+            const shuffled = [...augmentations].sort(() => Math.random() - 0.5);
+            const selectedAugments = shuffled.slice(0, 3);
+
+            let timeLeft = 15;
+            let isSelected = false;
+            let timerInterval;
+
+            // 증강 선택 함수
+            const selectAugment = (aug) => {
+                if (isSelected) return;
+                isSelected = true;
+                clearInterval(timerInterval);
+                aug.effect(character);
+                character.augmentations.push(aug);
+                gameState.augmentCountdown = 0;
+                
+                // 상대 선택이 완료될 때까지 대기
+                const checkEnemySelection = setInterval(() => {
+                    if (enemy.augmentations.length > 0 || !gameState.isPaused) {
+                        clearInterval(checkEnemySelection);
+                        modal.style.display = 'none';
+                        nextRound();
+                    }
+                }, 100);
+            };
+
+            // 증강 옵션 생성
+            selectedAugments.forEach(aug => {
+                const option = document.createElement('div');
+                option.className = 'augment-option';
+                option.innerHTML = `
+                    <h4>${aug.name}</h4>
+                    <p>${aug.description}</p>
+                `;
+                option.onclick = () => selectAugment(aug);
+                optionsDiv.appendChild(option);
+            });
+
+            // 모달 표시
+            modal.style.display = 'block';
+            const enemySelectionDiv = document.getElementById('enemySelection');
+            enemySelectionDiv.style.display = 'block';
+            enemySelectionDiv.innerHTML = '<p style="color: #e94560; margin: 0;">상대가 선택 중...</p>';
+            
+            // 화면 가운데 카운트다운 시작
+            gameState.augmentCountdown = 15;
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                gameState.augmentCountdown = timeLeft;
+                
+                if (timeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    gameState.augmentCountdown = 0;
+                    if (!isSelected) {
+                        // 시간 초과 시 랜덤 선택
+                        const randomAug = selectedAugments[Math.floor(Math.random() * selectedAugments.length)];
+                        selectAugment(randomAug);
+                    }
+                }
+            }, 1000);
+        }
+
+        // 다음 라운드
+        function nextRound() {
+            resizeCanvas();
+            gameState.round++;
+            gameState.gameTime = 180;
+
+            // 플레이어 상태 초기화
+            player.x = canvas.width * 0.2;
+            player.y = canvas.height * 0.5;
+            player.health = player.maxHealth;
+            player.ammo = player.maxAmmo;
+            player.bullets = [];
+            player.isReloading = false;
+            player.isDodging = false;
+            player.dodgeStartTime = 0;
+            player.dodgeEndTime = 0;
+            player.dodgeStartX = 0;
+            player.dodgeStartY = 0;
+            player.dodgeTargetX = 0;
+            player.dodgeTargetY = 0;
+            player.dodgeTrail = [];
+            player.lastDodgeTime = 0;
+            player.isReviving = false;
+            player.reviveTime = 0;
+            player.hasRevived = false; // 부활 사용 여부 초기화
+            player.isInvincible = false;
+            player.invincibleEndTime = 0;
+            player.slowEndTime = 0;
+
+            // 적 상태 초기화
+            enemy.x = canvas.width * 0.8;
+            enemy.y = canvas.height * 0.5;
+            enemy.health = enemy.maxHealth;
+            enemy.ammo = enemy.maxAmmo;
+            enemy.bullets = [];
+            enemy.isReloading = false;
+            enemy.isDodging = false;
+            enemy.dodgeStartTime = 0;
+            enemy.dodgeEndTime = 0;
+            enemy.dodgeStartX = 0;
+            enemy.dodgeStartY = 0;
+            enemy.dodgeTargetX = 0;
+            enemy.dodgeTargetY = 0;
+            enemy.dodgeTrail = [];
+            enemy.lastDodgeTime = 0;
+            enemy.isReviving = false;
+            enemy.reviveTime = 0;
+            enemy.hasRevived = false; // 부활 사용 여부 초기화
+            enemy.isInvincible = false;
+            enemy.invincibleEndTime = 0;
+            enemy.slowEndTime = 0;
+
+            // 3초 카운트다운 시작 (게임 완전히 멈춤)
+            gameState.countdown = 3;
+            gameState.isPaused = true;
+            
+            // 카운트다운 처리
+            const countdownInterval = setInterval(() => {
+                gameState.countdown--;
+                if (gameState.countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    gameState.isPaused = false;
+                }
+            }, 1000);
+        }
+
+        // 게임 종료
+        function endGame(winner) {
+            gameState.isGameOver = true;
+            const modal = document.getElementById('gameOverModal');
+            const title = document.getElementById('gameOverTitle');
+            const message = document.getElementById('gameOverMessage');
+
+            if (winner === 'player') {
+                title.textContent = '승리!';
+                title.style.color = '#4a9eff';
+                message.textContent = `축하합니다! ${gameState.playerWins}승으로 승리하셨습니다!`;
+            } else {
+                title.textContent = '패배';
+                title.style.color = '#e94560';
+                message.textContent = `아쉽네요... ${gameState.enemyWins}승으로 패배했습니다.`;
+            }
+
+            modal.style.display = 'block';
+        }
+
+        // 게임 재시작
+        function restartGame() {
+            resizeCanvas();
+            gameState = {
+                round: 1,
+                maxRounds: 7, // 7판
+                playerWins: 0,
+                enemyWins: 0,
+                winsNeeded: 4, // 4선제
+                gameTime: 180,
+                isGameOver: false,
+                isPaused: false,
+                roundWins: [], // 라운드 승리 기록 초기화
+                countdown: 3, // 첫 라운드 시작 카운트다운
+                shake: {
+                    intensity: 0,
+                    duration: 0
+                }
+            };
+            
+            // 첫 라운드 카운트다운 시작
+            gameState.isPaused = true;
+            const countdownInterval = setInterval(() => {
+                gameState.countdown--;
+                if (gameState.countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    gameState.isPaused = false;
+                }
+            }, 1000);
+
+            player.x = canvas.width * 0.2;
+            player.y = canvas.height * 0.5;
+            player.health = 5;
+            player.maxHealth = 5;
+            player.ammo = 6;
+            player.maxAmmo = 6;
+            player.bullets = [];
+            player.augmentations = [];
+            player.bulletSpeedMultiplier = 1;
+            player.hasCritical = false;
+            player.hasDoubleShot = false;
+            player.hasDodge = false;
+            player.hasRevive = false;
+            player.hasDeepWound = false;
+            player.isDodging = false;
+            player.dodgeStartTime = 0;
+            player.dodgeEndTime = 0;
+            player.dodgeStartX = 0;
+            player.dodgeStartY = 0;
+            player.dodgeTargetX = 0;
+            player.dodgeTargetY = 0;
+            player.dodgeTrail = [];
+            player.lastDodgeTime = 0;
+            player.isReviving = false;
+            player.reviveTime = 0;
+            player.hasRevived = false; // 부활 사용 여부 초기화
+            player.isInvincible = false;
+            player.invincibleEndTime = 0;
+            player.slowEndTime = 0;
+            player.damage = 1;
+            player.speed = 3;
+            player.reloadTime = 3000;
+            player.reloadStartTime = 0;
+            player.shootCooldown = 1000;
+
+            enemy.x = canvas.width * 0.8;
+            enemy.y = canvas.height * 0.5;
+            enemy.health = 5;
+            enemy.maxHealth = 5;
+            enemy.ammo = 6;
+            enemy.maxAmmo = 6;
+            enemy.bullets = [];
+            enemy.augmentations = [];
+            enemy.bulletSpeedMultiplier = 1;
+            enemy.hasCritical = false;
+            enemy.hasDoubleShot = false;
+            enemy.hasDodge = false;
+            enemy.hasRevive = false;
+            enemy.hasRevived = false; // 부활 사용 여부 초기화
+            enemy.hasDeepWound = false;
+            enemy.isDodging = false;
+            enemy.dodgeStartTime = 0;
+            enemy.dodgeEndTime = 0;
+            enemy.dodgeStartX = 0;
+            enemy.dodgeStartY = 0;
+            enemy.dodgeTargetX = 0;
+            enemy.dodgeTargetY = 0;
+            enemy.dodgeTrail = [];
+            enemy.lastDodgeTime = 0;
+            enemy.isReviving = false;
+            enemy.reviveTime = 0;
+            enemy.hasRevived = false; // 부활 사용 여부 초기화
+            enemy.isInvincible = false;
+            enemy.invincibleEndTime = 0;
+            enemy.slowEndTime = 0;
+            enemy.reloadTime = 3000;
+            enemy.reloadStartTime = 0;
+            enemy.shootCooldown = 1000;
+
+            document.getElementById('gameOverModal').style.display = 'none';
+            document.getElementById('augmentModal').style.display = 'none';
+        }
+
+        // 둥근 사각형 그리기 헬퍼 함수
+        function drawRoundedRect(x, y, width, height, radius) {
+            ctx.beginPath();
+            // 상단 왼쪽
+            ctx.moveTo(x + radius, y);
+            // 상단 오른쪽
+            ctx.lineTo(x + width - radius, y);
+            ctx.arcTo(x + width, y, x + width, y + radius, radius);
+            // 오른쪽 아래
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.arcTo(x + width, y + height, x + width - radius, y + height, radius);
+            // 아래 왼쪽
+            ctx.lineTo(x + radius, y + height);
+            ctx.arcTo(x, y + height, x, y + height - radius, radius);
+            // 왼쪽 위
+            ctx.lineTo(x, y + radius);
+            ctx.arcTo(x, y, x + radius, y, radius);
+            ctx.closePath();
+        }
+
+        // 체력 표시 그리기 (왼쪽 위 둥근 사각형)
+        function drawHealthHearts(character, x, y, isPlayer) {
+            const heartSize = 30;
+            const spacing = 5;
+            const borderRadius = 6; // 둥근 모서리 반경
+            const color = isPlayer ? '#4a9eff' : '#e94560';
+            
+            for (let i = 0; i < character.maxHealth; i++) {
+                const rectX = x + i * (heartSize + spacing);
+                
+                // 채워진 색상
+                ctx.fillStyle = i < character.health ? color : 'rgba(255, 255, 255, 0.2)';
+                drawRoundedRect(rectX, y, heartSize, heartSize, borderRadius);
+                ctx.fill();
+                
+                // 테두리
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                drawRoundedRect(rectX, y, heartSize, heartSize, borderRadius);
+                ctx.stroke();
+            }
+        }
+
+        // 증강 아이콘 그리기
+        function drawAugmentIcon(ctx, x, y, size, augId) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            switch(augId) {
+                case 'health':
+                    // 체력: 하트 모양
+                    ctx.fillStyle = '#ff006e';
+                    ctx.beginPath();
+                    ctx.moveTo(0, size * 0.3);
+                    ctx.bezierCurveTo(0, 0, -size * 0.5, 0, -size * 0.5, size * 0.3);
+                    ctx.bezierCurveTo(-size * 0.5, size * 0.6, 0, size * 0.9, 0, size * 0.9);
+                    ctx.bezierCurveTo(0, size * 0.9, size * 0.5, size * 0.6, size * 0.5, size * 0.3);
+                    ctx.bezierCurveTo(size * 0.5, 0, 0, 0, 0, size * 0.3);
+                    ctx.fill();
+                    break;
+                case 'speed':
+                    // 속도: 화살표
+                    ctx.fillStyle = '#00ff88';
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.3, 0);
+                    ctx.lineTo(size * 0.3, 0);
+                    ctx.lineTo(0, -size * 0.4);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.3, 0);
+                    ctx.lineTo(0, size * 0.4);
+                    ctx.lineTo(size * 0.3, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 'bulletSpeed':
+                    // 총알 속도: 번개
+                    ctx.fillStyle = '#ffaa00';
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.2, -size * 0.4);
+                    ctx.lineTo(size * 0.1, 0);
+                    ctx.lineTo(-size * 0.1, 0);
+                    ctx.lineTo(size * 0.2, size * 0.4);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 'ammo':
+                    // 탄약: 원
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 'fireRate':
+                    // 발사 속도: 별
+                    ctx.fillStyle = '#ff00ff';
+                    ctx.beginPath();
+                    for (let i = 0; i < 5; i++) {
+                        const angle = (i * 4 * Math.PI / 5) - Math.PI / 2;
+                        const r = i % 2 === 0 ? size * 0.4 : size * 0.2;
+                        const x = Math.cos(angle) * r;
+                        const y = Math.sin(angle) * r;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 'reload':
+                    // 재장전: 시계
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(0, -size * 0.3);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(size * 0.2, 0);
+                    ctx.stroke();
+                    break;
+                case 'critical':
+                    // 크리티컬: X 표시
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.3, -size * 0.3);
+                    ctx.lineTo(size * 0.3, size * 0.3);
+                    ctx.moveTo(size * 0.3, -size * 0.3);
+                    ctx.lineTo(-size * 0.3, size * 0.3);
+                    ctx.stroke();
+                    break;
+                case 'doubleShot':
+                    // 더블샷: 두 개의 원
+                    ctx.fillStyle = '#ffff00';
+                    ctx.beginPath();
+                    ctx.arc(-size * 0.2, 0, size * 0.25, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(size * 0.2, 0, size * 0.25, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 'dodge':
+                    // 구르기: 대시선
+                    ctx.strokeStyle = '#8888ff';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([3, 3]);
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.4, 0);
+                    ctx.lineTo(size * 0.4, 0);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    break;
+                case 'revive':
+                    // 부활: 십자가
+                    ctx.fillStyle = '#00ff00';
+                    ctx.fillRect(-size * 0.15, -size * 0.4, size * 0.3, size * 0.8);
+                    ctx.fillRect(-size * 0.4, -size * 0.15, size * 0.8, size * 0.3);
+                    break;
+                case 'deepWound':
+                    // 깊은 상처: 칼
+                    ctx.fillStyle = '#880000';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.4);
+                    ctx.lineTo(-size * 0.1, size * 0.2);
+                    ctx.lineTo(0, size * 0.3);
+                    ctx.lineTo(size * 0.1, size * 0.2);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                default:
+                    // 기본: 사각형
+                    ctx.fillStyle = '#888888';
+                    ctx.fillRect(-size * 0.3, -size * 0.3, size * 0.6, size * 0.6);
+            }
+            
+            ctx.restore();
+        }
+
+        // 증강 아이콘 목록 그리기
+        function drawAugmentIcons(character, x, y, align = 'left') {
+            const iconSize = 16;
+            const spacing = 4;
+            
+            character.augmentations.forEach((aug, index) => {
+                let iconX;
+                if (align === 'right') {
+                    iconX = x - (character.augmentations.length - index - 1) * (iconSize + spacing) - iconSize / 2;
+                } else {
+                    iconX = x + index * (iconSize + spacing) + iconSize / 2;
+                }
+                
+                // 배경 원
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.beginPath();
+                ctx.arc(iconX, y, iconSize / 2 + 2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 아이콘 그리기
+                drawAugmentIcon(ctx, iconX, y, iconSize, aug.id);
+            });
+        }
+
+        // 탄환수 표시 (체력 아래 - 하얀색 원)
+        function drawAmmoCount(character, x, y, align = 'left') {
+            const circleSize = 12; // 체력바(30px)보다 더 작은 원
+            const spacing = 4;
+            const radius = circleSize / 2;
+            const centerY = y + radius; // 원의 중심 Y 좌표
+            
+            // 총 탄환수만큼 원 그리기 (사용한 탄환은 반투명)
+            for (let i = 0; i < character.maxAmmo; i++) {
+                if (i < character.ammo) {
+                    // 남은 탄환: 불투명 하얀색
+                    ctx.fillStyle = '#ffffff';
+                } else {
+                    // 사용한 탄환: 반투명
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                }
+                
+                let centerX;
+                if (align === 'right') {
+                    // 오른쪽 정렬: 오른쪽부터 왼쪽으로
+                    centerX = x - (character.maxAmmo - i - 1) * (circleSize + spacing) - radius;
+                } else {
+                    // 왼쪽 정렬: 왼쪽부터 오른쪽으로
+                    centerX = x + i * (circleSize + spacing) + radius;
+                }
+                
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 마름모 그리기 함수
+        function drawDiamond(x, y, size, color) {
+            ctx.save();
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(x, y - size / 2); // 위
+            ctx.lineTo(x + size / 2, y); // 오른쪽
+            ctx.lineTo(x, y + size / 2); // 아래
+            ctx.lineTo(x - size / 2, y); // 왼쪽
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // 카운트다운 표시 (마름모 아래)
+        function drawCountdown() {
+            const countdownValue = gameState.countdown > 0 ? gameState.countdown : gameState.augmentCountdown;
+            if (countdownValue <= 0) return;
+            
+            ctx.save();
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.font = 'bold 72px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const y = 100; // 마름모 아래
+            
+            // 반투명 배경
+            const textWidth = ctx.measureText(countdownValue).width;
+            const padding = 30;
+            ctx.fillRect(
+                canvas.width / 2 - textWidth / 2 - padding,
+                y - 50,
+                textWidth + padding * 2,
+                100
+            );
+            
+            // 숫자 표시
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(countdownValue, canvas.width / 2, y);
+            ctx.restore();
+        }
+
+        // 승리 표시 마름모 그리기 (화면 위쪽 가운데)
+        function drawWinIndicators() {
+            const totalRounds = 7;
+            const diamondSize = 20;
+            const spacing = 5;
+            const totalWidth = (totalRounds * diamondSize) + ((totalRounds - 1) * spacing);
+            const startX = (canvas.width - totalWidth) / 2;
+            const y = 35; // 살짝 아래로 내림
+
+            for (let i = 0; i < totalRounds; i++) {
+                let color;
+                // 라운드 순서대로 승자를 표시
+                if (i < gameState.roundWins.length) {
+                    if (gameState.roundWins[i] === 'player') {
+                        // 플레이어 승리: 파란색
+                        color = 'rgba(74, 158, 255, 0.8)';
+                    } else {
+                        // 적 승리: 빨간색
+                        color = 'rgba(233, 69, 96, 0.8)';
+                    }
+                } else {
+                    // 아직 진행되지 않은 라운드: 반투명 회색
+                    color = 'rgba(255, 255, 255, 0.2)';
+                }
+                
+                const x = startX + i * (diamondSize + spacing) + diamondSize / 2;
+                drawDiamond(x, y, diamondSize, color);
+            }
+        }
+
+        // 재장전 진행률 바 그리기 (동그란 바로)
+        function drawReloadBar(character, x, y) {
+            if (!character.isReloading) return;
+            
+            const now = Date.now();
+            const elapsed = now - character.reloadStartTime;
+            const progress = Math.min(elapsed / character.reloadTime, 1); // 0~1 사이 값
+            
+            const radius = 8; // 원의 반지름 (20% 줄임: 10 -> 8)
+            const lineWidth = 4; // 선 두께 (30% 늘림: 3 -> 4)
+            
+            // 배경 원 (회색)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = lineWidth;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // 진행률 원 (하얀색)
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(x, y, radius, -Math.PI / 2, -Math.PI / 2 + (progress * Math.PI * 2));
+            ctx.stroke();
+        }
+
+        // 그리기 함수
+        function draw() {
+            // 화면 흔들림 적용
+            let shakeX = 0;
+            let shakeY = 0;
+            if (gameState.shake.duration > 0) {
+                shakeX = (Math.random() - 0.5) * gameState.shake.intensity;
+                shakeY = (Math.random() - 0.5) * gameState.shake.intensity;
+                gameState.shake.duration = Math.max(0, gameState.shake.duration - 16); // 약 60fps 기준
+                gameState.shake.intensity *= 0.9; // 점진적으로 감소
+            }
+
+            // 배경 클리어 (흔들림 전에 그리기)
+            ctx.fillStyle = '#0f0f1e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 화면 흔들림 적용
+            ctx.save();
+            ctx.translate(shakeX, shakeY);
+
+            // 격자 그리기
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(i, 0);
+                ctx.lineTo(i, canvas.height);
+                ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, i);
+                ctx.lineTo(canvas.width, i);
+                ctx.stroke();
+            }
+
+            // 총알 그리기
+            player.bullets.forEach(bullet => bullet.draw());
+            enemy.bullets.forEach(bullet => bullet.draw());
+
+            // 구르기 잔상 그리기
+            function drawDodgeTrail(character) {
+                if (character.isDodging && character.dodgeTrail && character.dodgeTrail.length > 0) {
+                    // 잔상 효과 (과거 위치 그리기)
+                    character.dodgeTrail.forEach((trail, index) => {
+                        const fadeAlpha = trail.alpha * (1 - index * 0.2); // 점진적으로 투명
+                        ctx.globalAlpha = Math.max(0, fadeAlpha);
+                        ctx.fillStyle = character.color;
+                        ctx.beginPath();
+                        ctx.arc(trail.x, trail.y, character.radius * 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                    ctx.globalAlpha = 1.0;
+                }
+            }
+
+            // 플레이어 그리기
+            drawDodgeTrail(player);
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.angle);
+            
+            // 무적 상태일 때 반투명
+            if (player.isInvincible || player.isReviving) {
+                ctx.globalAlpha = 0.5;
+            }
+            
+            ctx.fillStyle = player.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            // 리볼버 그리기
+            ctx.fillStyle = '#333';
+            ctx.fillRect(player.radius - 7.5, -4.5, 22.5, 9); // 1.5배 증가
+            ctx.globalAlpha = 1.0;
+            ctx.restore();
+
+            // 적 그리기
+            drawDodgeTrail(enemy);
+            ctx.save();
+            ctx.translate(enemy.x, enemy.y);
+            ctx.rotate(enemy.angle);
+            
+            // 무적 상태일 때 반투명
+            if (enemy.isInvincible || enemy.isReviving) {
+                ctx.globalAlpha = 0.5;
+            }
+            
+            ctx.fillStyle = enemy.color;
+            ctx.beginPath();
+            ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2);
+            ctx.fill();
+            // 리볼버 그리기
+            ctx.fillStyle = '#333';
+            ctx.fillRect(enemy.radius - 7.5, -4.5, 22.5, 9); // 1.5배 증가
+            ctx.globalAlpha = 1.0;
+            ctx.restore();
+
+            // 화면 흔들림 효과 종료
+            ctx.restore();
+
+            // UI 요소들 (흔들림의 영향을 받지 않음)
+            // 승리 표시 마름모 (화면 위쪽 가운데)
+            drawWinIndicators();
+            
+            // 카운트다운 표시 (마름모 아래)
+            if (gameState.countdown > 0 || gameState.augmentCountdown > 0) {
+                drawCountdown();
+            }
+            
+            // 플레이어 체력 표시 (왼쪽 위)
+            const playerHealthY = 20;
+            drawHealthHearts(player, 20, playerHealthY, true);
+            // 플레이어 탄환수 표시 (체력 아래 - 원으로)
+            const playerAmmoY = playerHealthY + 40;
+            drawAmmoCount(player, 20, playerAmmoY, 'left');
+            // 플레이어 증강 아이콘 표시 (탄환 아래)
+            drawAugmentIcons(player, 20, playerAmmoY + 20, 'left');
+            // 플레이어 재장전 바 표시 (플레이어 바로 왼쪽 위) - 플레이어 위치에 흔들림 적용
+            if (player.isReloading) {
+                drawReloadBar(player, player.x - 40 + shakeX, player.y - 40 + shakeY); // 캐릭터 크기 증가에 맞춰 조정
+            }
+            
+            // 적 체력 표시 (오른쪽 위)
+            const enemyHealthX = canvas.width - (enemy.maxHealth * 35) - 20;
+            const enemyHealthY = 20;
+            drawHealthHearts(enemy, enemyHealthX, enemyHealthY, false);
+            // 적 탄환수 표시 (체력 아래, 오른쪽 정렬 - 원으로)
+            const enemyAmmoY = enemyHealthY + 40;
+            drawAmmoCount(enemy, enemyHealthX + (enemy.maxHealth * 35), enemyAmmoY, 'right');
+            // 적 증강 아이콘 표시 (탄환 아래)
+            drawAugmentIcons(enemy, enemyHealthX + (enemy.maxHealth * 35), enemyAmmoY + 20, 'right');
+            // 적 재장전 바 표시 (적 바로 오른쪽 위) - 흔들림 적용
+            if (enemy.isReloading) {
+                drawReloadBar(enemy, enemy.x + 40 + shakeX, enemy.y - 40 + shakeY);
+            }
+        }
+
+        // UI 업데이트 (더 이상 필요 없지만 게임 상태는 유지)
+        function updateUI() {
+            // UI는 캔버스 위에 직접 그리므로 여기서는 아무것도 하지 않음
+        }
+
+        // 게임 루프
+        let lastTime = 0;
+        function gameLoop(currentTime) {
+            if (!gameState.isPaused && !gameState.isGameOver) {
+                const deltaTime = currentTime - lastTime;
+                lastTime = currentTime;
+
+                // 타이머 감소 (초당 1씩)
+                if (deltaTime >= 1000) {
+                    gameState.gameTime--;
+                    lastTime = currentTime;
+
+                    // 시간 초과
+                    if (gameState.gameTime <= 0) {
+                        if (player.health > enemy.health) {
+                            endRound('player');
+                        } else if (enemy.health > player.health) {
+                            endRound('enemy');
+                        } else {
+                            // 무승부 - 체력이 더 많은 쪽이 승리
+                            endRound(player.health >= enemy.health ? 'player' : 'enemy');
+                        }
+                    }
+                }
+
+                updatePlayer();
+                updateEnemy();
+                updateBullets(player);
+                updateBullets(enemy);
+            }
+
+            draw();
+            updateUI();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 게임 시작
+        gameLoop(0);
+    </script>
+</body>
+</html>
+
