@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>리볼버 듀얼</title>
-    <!-- Railway 환경 변수 설정 (선택사항) -->
-    <!-- Railway에서 환경 변수 WS_SERVER_URL을 설정한 경우 사용 -->
-    <!-- 예: <script>window.WS_SERVER_URL = 'wss://your-app.railway.app/ws';</script> -->
     <style>
         * {
             margin: 0;
@@ -198,91 +195,6 @@
             color: #ccc;
         }
 
-        #multiplayerMenu {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(15, 15, 30, 0.95);
-            display: none;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 2001;
-        }
-
-        #multiplayerMenu h2 {
-            font-size: 36px;
-            color: #e94560;
-            margin-bottom: 40px;
-            text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
-        }
-
-        .room-input {
-            background: rgba(0, 0, 0, 0.5);
-            border: 2px solid #e94560;
-            color: #fff;
-            padding: 15px 20px;
-            font-size: 20px;
-            border-radius: 10px;
-            margin: 10px;
-            min-width: 300px;
-            text-align: center;
-        }
-
-        .room-input::placeholder {
-            color: #888;
-        }
-
-        .room-code-display {
-            font-size: 48px;
-            color: #ffc107;
-            margin: 20px 0;
-            font-weight: bold;
-            letter-spacing: 10px;
-            text-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
-        }
-
-        .back-button {
-            background: rgba(100, 100, 100, 0.3);
-            border: 2px solid #888;
-            color: #fff;
-            padding: 15px 30px;
-            font-size: 18px;
-            border-radius: 10px;
-            cursor: pointer;
-            margin-top: 20px;
-            transition: all 0.3s;
-        }
-
-        .back-button:hover {
-            background: rgba(100, 100, 100, 0.5);
-            transform: scale(1.05);
-        }
-
-        .status-message {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 10px;
-            color: #fff;
-            font-size: 16px;
-            min-width: 300px;
-            text-align: center;
-        }
-
-        .status-message.waiting {
-            color: #ffc107;
-        }
-
-        .status-message.error {
-            color: #e94560;
-        }
-
-        .status-message.success {
-            color: #4a9eff;
-        }
 
     </style>
 </head>
@@ -317,32 +229,12 @@
         <div id="mainMenu">
             <h1>리볼버 듀얼</h1>
             <button class="menu-button" onclick="startSoloGame()">솔로 플레이</button>
-            <button class="menu-button" onclick="showMultiplayerMenu()">멀티 플레이</button>
             <div id="controlsInfo">
                 <h3>조작법</h3>
-                <p><strong>플레이어 1:</strong> WASD 이동, 마우스 조준, 좌클릭 발사, 우클릭 구르기</p>
-                <p><strong>플레이어 2 (로컬 멀티):</strong> 화살표 키 이동, 마우스 조준, 우클릭 발사, Enter 구르기</p>
+                <p><strong>플레이어:</strong> WASD 이동, 마우스 조준, 좌클릭 발사, 우클릭 구르기</p>
             </div>
         </div>
 
-        <div id="multiplayerMenu">
-            <h2>멀티 플레이</h2>
-            <button class="menu-button" onclick="startLocalMultiplayer()">로컬 멀티플레이</button>
-            <button class="menu-button" onclick="createRoom()">방 생성</button>
-            <button class="menu-button" onclick="showJoinRoom()">방 입장</button>
-            <div id="createRoomSection" style="display: none;">
-                <div class="room-code-display" id="roomCodeDisplay"></div>
-                <div class="status-message waiting" id="createRoomStatus">상대방을 기다리는 중...</div>
-                <button class="back-button" onclick="backToMultiplayerMenu()">뒤로</button>
-            </div>
-            <div id="joinRoomSection" style="display: none;">
-                <input type="text" class="room-input" id="roomCodeInput" placeholder="방 코드 입력 (5자리)" maxlength="5" pattern="[0-9]{5}">
-                <button class="menu-button" onclick="joinRoom()">입장</button>
-                <div class="status-message" id="joinRoomStatus"></div>
-                <button class="back-button" onclick="backToMultiplayerMenu()">뒤로</button>
-            </div>
-            <button class="back-button" onclick="backToMainMenu()" style="margin-top: 30px;">메인 메뉴로</button>
-        </div>
     </div>
 
     <script>
@@ -368,11 +260,6 @@
             isGameOver: false,
             isPaused: false,
             isMenu: true, // 메뉴 화면 표시 여부
-            isMultiplayer: false, // 멀티 플레이 모드 여부
-            isNetworkMultiplayer: false, // 네트워크 멀티 플레이 여부
-            isLocalMultiplayer: false, // 로컬 멀티 플레이 여부
-            isHost: false, // 방장 여부
-            roomCode: null, // 방 코드
             roundWins: [], // 각 라운드의 승자 기록 ('player' 또는 'enemy')
             countdown: 3, // 라운드 시작 카운트다운
             augmentCountdown: 0, // 증강 선택 카운트다운 (0이면 표시 안함)
@@ -382,25 +269,6 @@
                 duration: 0
             }
         };
-        
-        // WebSocket 연결 (Railway 서버 주소)
-        let ws = null;
-        // WebSocket URL 설정
-        function getWebSocketURL() {
-            // 1. 환경 변수로 설정된 경우 (배포 환경에서 사용)
-            // HTML에서 <script> 태그로 window.WS_SERVER_URL 설정 가능
-            if (window.WS_SERVER_URL) {
-                return window.WS_SERVER_URL;
-            }
-            
-            // 2. 현재 호스트 기반으로 자동 생성
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.host; // hostname + port
-            
-            // 로컬 개발 환경: ws://localhost:3000
-            // 배포 환경: wss://your-domain.com
-            return `${protocol}//${host}`;
-        }
 
         // 플레이어
         const player = {
@@ -441,6 +309,30 @@
             hasRecoveryContractUsed: false, // 회복계약 사용 여부 (라운드당 한번)
             hasPurify: false, // 정화
             hasFocusedFire: false, // 집중 사격
+            hasShotgun: false, // 샷건
+            hasRagged: false, // 오합지졸
+            hasGhost: false, // 유령
+            hasFortify: false, // 거점확보
+            isFortified: false, // 거점 확보 상태
+            fortifyStartTime: 0, // 거점 확보 시작 시간
+            lastPosition: { x: 0, y: 0 }, // 마지막 위치
+            stationaryTime: 0, // 정지한 시간
+            hasOverheat: false, // 과열
+            overheatHitCount: 0, // 연속 히트 카운트
+            lastHitTime: 0, // 마지막 히트 시간
+            hasGamble: false, // 도박
+            hasWeaken: false, // 약화
+            isWeakened: false, // 약화 상태
+            weakenEndTime: 0, // 약화 종료 시간
+            hasDamageBoost: false, // 데미지 1.2배
+            hasLightning: false, // 번개
+            isStunned: false, // 기절 상태
+            stunEndTime: 0, // 기절 종료 시간
+            hasShield: false, // 방어막
+            shieldReady: false, // 방어막 준비됨
+            shieldCooldown: 0, // 방어막 쿨타임
+            hasRegeneration: false, // 재생
+            lastRegenTime: 0, // 마지막 회복 시간
             isVulnerable: false, // 취약 상태
             vulnerabilityUsed: false, // 취약 사용 여부
             poisonEffects: [], // 독 효과 배열 {target, startTime, duration, damagePerSecond}
@@ -458,8 +350,7 @@
             isInvincible: false,
             invincibleEndTime: 0,
             slowEndTime: 0,
-            damageNumbers: [], // 데미지 숫자 표시용
-            lastSyncTime: 0 // 네트워크 동기화용
+            damageNumbers: [] // 데미지 숫자 표시용
         };
 
         // 적 (AI)
@@ -501,6 +392,30 @@
             hasRecoveryContractUsed: false, // 회복계약 사용 여부 (라운드당 한번)
             hasPurify: false, // 정화
             hasFocusedFire: false, // 집중 사격
+            hasShotgun: false, // 샷건
+            hasRagged: false, // 오합지졸
+            hasGhost: false, // 유령
+            hasFortify: false, // 거점확보
+            isFortified: false, // 거점 확보 상태
+            fortifyStartTime: 0, // 거점 확보 시작 시간
+            lastPosition: { x: 0, y: 0 }, // 마지막 위치
+            stationaryTime: 0, // 정지한 시간
+            hasOverheat: false, // 과열
+            overheatHitCount: 0, // 연속 히트 카운트
+            lastHitTime: 0, // 마지막 히트 시간
+            hasGamble: false, // 도박
+            hasWeaken: false, // 약화
+            isWeakened: false, // 약화 상태
+            weakenEndTime: 0, // 약화 종료 시간
+            hasDamageBoost: false, // 데미지 1.2배
+            hasLightning: false, // 번개
+            isStunned: false, // 기절 상태
+            stunEndTime: 0, // 기절 종료 시간
+            hasShield: false, // 방어막
+            shieldReady: false, // 방어막 준비됨
+            shieldCooldown: 0, // 방어막 쿨타임
+            hasRegeneration: false, // 재생
+            lastRegenTime: 0, // 마지막 회복 시간
             isVulnerable: false, // 취약 상태
             vulnerabilityUsed: false, // 취약 사용 여부
             poisonEffects: [], // 독 효과 배열 {target, startTime, duration, damagePerSecond}
@@ -523,63 +438,6 @@
             damageNumbers: [] // 데미지 숫자 표시용
         };
 
-        // 플레이어 2 (멀티 플레이용)
-        const player2 = {
-            x: canvas.width * 0.8,
-            y: canvas.height * 0.5,
-            radius: 30,
-            speed: 2.5,
-            health: 5,
-            displayHealth: 5,
-            maxHealth: 5,
-            ammo: 6,
-            maxAmmo: 6,
-            reloadTime: 3000,
-            isReloading: false,
-            reloadStartTime: 0,
-            angle: Math.PI,
-            color: '#e94560',
-            bullets: [],
-            lastShot: 0,
-            shootCooldown: 1000,
-            damage: 1,
-            augmentations: [],
-            bulletSpeedMultiplier: 1,
-            bulletSizeMultiplier: 1,
-            hasCritical: false,
-            hasDoubleShot: false,
-            hasDodge: false,
-            hasRevive: false,
-            hasRevived: false,
-            hasDeepWound: false,
-            hasOneShotOneKill: false,
-            hasPoisonBullet: false,
-            hasReloadHeal: false,
-            hasSurvivalInstinct: false,
-            hasLastBullet: false,
-            hasRecoveryContract: false,
-            hasRecoveryContractUsed: false,
-            hasPurify: false,
-            hasFocusedFire: false,
-            isVulnerable: false,
-            vulnerabilityUsed: false,
-            poisonEffects: [],
-            isDodging: false,
-            dodgeStartTime: 0,
-            dodgeEndTime: 0,
-            dodgeStartX: 0,
-            dodgeStartY: 0,
-            dodgeTargetX: 0,
-            dodgeTargetY: 0,
-            dodgeTrail: [],
-            lastDodgeTime: 0,
-            isReviving: false,
-            reviveTime: 0,
-            isInvincible: false,
-            invincibleEndTime: 0,
-            slowEndTime: 0,
-            damageNumbers: []
-        };
 
         // 증강 목록
         const augmentations = [
@@ -619,8 +477,8 @@
             },
             { 
                 id: 'fireRate', 
-                name: '발사 쿨다운 -25%', 
-                description: '발사 쿨다운 -25%', 
+                name: '발사속도 -25%', 
+                description: '발사속도 -25%', 
                 effect: (character) => { 
                     character.shootCooldown *= 0.75; 
                 } 
@@ -696,11 +554,11 @@
             { 
                 id: 'oneShotOneKill', 
                 name: '원샷원킬', 
-                description: '데미지 +3, 최대 탄약 1로 고정', 
+                description: '최대 탄약 1개로 고정, 총알 데미지 *3', 
                 effect: (character) => { 
-                    character.damage = (character.damage || 1) + 3; 
                     character.maxAmmo = 1; 
                     character.ammo = Math.min(character.ammo, 1); 
+                    character.damage = (character.damage || 1) * 3; // 총알 데미지 *3
                     character.hasOneShotOneKill = true; 
                 } 
             },
@@ -768,6 +626,108 @@
                     character.hasFocusedFire = true; 
                 } 
             },
+            { 
+                id: 'shotgun', 
+                name: '샷건', 
+                description: '모든 탄약을 ±20도 범위에서 한번에 발사', 
+                effect: (character) => { 
+                    character.hasShotgun = true; 
+                } 
+            },
+            { 
+                id: 'ragged', 
+                name: '오합지졸', 
+                description: '최대 탄약 +3, 발사속도 -50%, 총알 데미지 *0.5', 
+                effect: (character) => { 
+                    character.maxAmmo += 3; 
+                    character.ammo += 3; 
+                    character.shootCooldown *= 0.5; // 발사속도 -50% (쿨타임 절반)
+                    character.damage = (character.damage || 1) * 0.5; // 총알 데미지 *0.5
+                    character.hasRagged = true; 
+                } 
+            },
+            { 
+                id: 'ghost', 
+                name: '유령', 
+                description: '상대의 공격을 25% 확률로 무시', 
+                effect: (character) => { 
+                    character.hasGhost = true; 
+                } 
+            },
+            { 
+                id: 'fortify', 
+                name: '거점확보', 
+                description: '3초동안 가만히 서있을 경우 다시 움직일때까지 받는 데미지 *0.5', 
+                effect: (character) => { 
+                    character.hasFortify = true; 
+                    character.fortifyStartTime = 0; // 거점 확보 시작 시간
+                    character.isFortified = false; // 거점 확보 상태
+                    character.lastPosition = { x: character.x, y: character.y }; // 마지막 위치
+                    character.stationaryTime = 0; // 정지한 시간
+                } 
+            },
+            { 
+                id: 'overheat', 
+                name: '과열', 
+                description: '상대에게 총알을 연속으로 맞출 시 맞출때마다 데미지 0.5배씩 상승', 
+                effect: (character) => { 
+                    character.hasOverheat = true; 
+                    character.overheatHitCount = 0; // 연속 히트 카운트
+                    character.lastHitTime = 0; // 마지막 히트 시간
+                } 
+            },
+            { 
+                id: 'gamble', 
+                name: '도박', 
+                description: '총알이 ±10도 범위에서 랜덤하게 나가지만 데미지는 1~2배 사이로 랜덤', 
+                effect: (character) => { 
+                    character.hasGamble = true; 
+                } 
+            },
+            { 
+                id: 'weaken', 
+                name: '약화', 
+                description: '상대에게 총알을 맞출 시 3초동안 상대 데미지 -0.25', 
+                effect: (character) => { 
+                    character.hasWeaken = true; 
+                } 
+            },
+            { 
+                id: 'damageBoost', 
+                name: '데미지 1.2배', 
+                description: '총알 데미지 *1.2', 
+                effect: (character) => { 
+                    character.damage = (character.damage || 1) * 1.2; 
+                    character.hasDamageBoost = true; 
+                } 
+            },
+            { 
+                id: 'lightning', 
+                name: '번개', 
+                description: '적에게 총알을 맞출 시 25% 확률로 적 0.75초 기절', 
+                effect: (character) => { 
+                    character.hasLightning = true; 
+                } 
+            },
+            { 
+                id: 'shield', 
+                name: '방어막', 
+                description: '받는 데미지 1회 무시 (쿨타임 5초)', 
+                effect: (character) => { 
+                    character.hasShield = true; 
+                    character.shieldReady = true; // 방어막 준비됨
+                    character.shieldCooldown = 0; // 쿨타임
+                } 
+            },
+            { 
+                id: 'regeneration', 
+                name: '재생', 
+                description: '1초마다 체력 0.1 회복', 
+                effect: (character) => { 
+                    character.hasRegeneration = true; 
+                    character.lastRegenTime = 0; // 마지막 회복 시간
+                } 
+            },
         ];
 
         // 키 입력 상태
@@ -799,17 +759,9 @@
         canvas.addEventListener('contextmenu', (e) => {
             e.preventDefault(); // 우클릭 메뉴 방지
             
-            // 로컬 멀티플레이어 모드: 플레이어 2 발사
-            if (gameState.isLocalMultiplayer && !gameState.isPaused && !gameState.isGameOver && !player2.isDodging && !player2.isReloading) {
-                const now = Date.now();
-                if (player2.ammo > 0 && now - player2.lastShot >= player2.shootCooldown) {
-                    shoot(player2);
-                }
-            } else if (!gameState.isLocalMultiplayer) {
-                // 일반 모드: 플레이어 1 구르기 (우클릭)
+            // 플레이어 구르기 (우클릭)
                 if (player.hasDodge && !player.isDodging && !gameState.isPaused && !gameState.isGameOver) {
                     dodge(player);
-                }
             }
         });
 
@@ -826,12 +778,13 @@
                 this.radius = 9 * sizeMultiplier;
                 this.owner = owner;
                 this.damage = owner.damage || 1;
-                if (owner.hasOneShotOneKill) {
-                    this.damage += 3;
-                }
                 // 비장의 한발: 마지막 탄환의 데미지 +1.5
                 if (owner.hasLastBullet && owner.ammo === 1) {
                     this.damage += 1.5;
+                }
+                // 약화 상태: 데미지 -0.25 (도트딜 제외)
+                if (owner.isWeakened) {
+                    this.damage = Math.max(0.25, this.damage - 0.25);
                 }
                 this.isFreeShot = isFreeShot; // 탄약 소모 없는 총알 (더블샷용)
                 this.hasPoison = owner.hasPoisonBullet || false; // 독 탄환 여부
@@ -872,16 +825,52 @@
         // 발사 함수
         function shoot(character) {
             const now = Date.now();
+            // 기절 상태면 발사 불가
+            if (character.isStunned) return;
             if (character.ammo > 0 && !character.isReloading && 
                 now - character.lastShot > character.shootCooldown) {
                 
+                // 샷건 증강: 모든 탄약을 ±20도 범위에서 한번에 발사
+                if (character.hasShotgun) {
+                    const currentAmmo = character.ammo;
+                    for (let i = 0; i < currentAmmo; i++) {
+                        // ±20도 범위 내 랜덤 각도
+                        const randomAngle = (Math.random() - 0.5) * (Math.PI * 40 / 180); // -20도 ~ +20도
                 const bullet = new Bullet(
                     character.x + Math.cos(character.angle) * character.radius,
                     character.y + Math.sin(character.angle) * character.radius,
-                    character.angle,
+                            character.angle + randomAngle,
                     character,
                     false
                 );
+                        character.bullets.push(bullet);
+                    }
+                    character.ammo = 0; // 모든 탄약 소모
+                    character.lastShot = now;
+                } else {
+                    // 일반 발사
+                    let bulletAngle = character.angle;
+                    let bulletDamage = character.damage || 1;
+                    
+                    // 도박 증강: ±10도 랜덤 각도, 데미지 1~2배 랜덤
+                    if (character.hasGamble) {
+                        const randomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
+                        bulletAngle = character.angle + randomAngle;
+                        bulletDamage = bulletDamage * (1 + Math.random()); // 1~2배
+                        bulletDamage = Math.round(bulletDamage * 10) / 10; // 소수점 1자리로 반올림
+                    }
+                    
+                    const bullet = new Bullet(
+                        character.x + Math.cos(character.angle) * character.radius,
+                        character.y + Math.sin(character.angle) * character.radius,
+                        bulletAngle,
+                        character,
+                        false
+                    );
+                    // 도박 증강: 데미지 랜덤 적용
+                    if (character.hasGamble) {
+                        bullet.damage = bulletDamage;
+                    }
                 character.bullets.push(bullet);
                 character.ammo--;
                 character.lastShot = now;
@@ -898,25 +887,12 @@
                         true // 탄약 소모 없음
                     );
                     character.bullets.push(doubleBullet);
+                    }
                 }
 
                 // 화면 흔들림 효과 (플레이어 발사 시에만)
-                if (character === player || (character === player2 && gameState.isLocalMultiplayer)) {
+                if (character === player) {
                     addScreenShake(12, 200);
-                    
-                    // 네트워크 멀티 플레이: 발사 액션 전송 (플레이어 1만)
-                    if (character === player && gameState.isNetworkMultiplayer && ws && ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({
-                            type: 'playerAction',
-                            action: {
-                                type: 'shoot',
-                                x: character.x,
-                                y: character.y,
-                                angle: character.angle,
-                                ammo: character.ammo
-                            }
-                        }));
-                    }
                 }
 
                 // 자동 재장전
@@ -931,17 +907,6 @@
             if (character.ammo < character.maxAmmo && !character.isReloading) {
                 character.isReloading = true;
                 character.reloadStartTime = Date.now();
-                
-                // 네트워크 멀티 플레이: 재장전 액션 전송
-                if (character === player && gameState.isNetworkMultiplayer && ws && ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({
-                        type: 'playerAction',
-                        action: {
-                            type: 'reload',
-                            startTime: character.reloadStartTime
-                        }
-                    }));
-                }
                 
                 setTimeout(() => {
                     character.ammo = character.maxAmmo;
@@ -967,6 +932,8 @@
         // 구르기 함수
         function dodge(character) {
             const now = Date.now();
+            // 기절 상태면 구르기 불가
+            if (character.isStunned) return;
             // 쿨타임 체크 (3초)
             if (character.isDodging || now - character.lastDodgeTime < 3000) return;
             
@@ -990,22 +957,6 @@
             // 경계 체크
             character.dodgeTargetX = Math.max(character.radius, Math.min(canvas.width - character.radius, targetX));
             character.dodgeTargetY = Math.max(character.radius, Math.min(canvas.height - character.radius, targetY));
-            
-            // 네트워크 멀티 플레이: 구르기 액션 전송
-            if (character === player && gameState.isNetworkMultiplayer && ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'playerAction',
-                    action: {
-                        type: 'dodge',
-                        startX: character.dodgeStartX,
-                        startY: character.dodgeStartY,
-                        targetX: character.dodgeTargetX,
-                        targetY: character.dodgeTargetY,
-                        startTime: character.dodgeStartTime,
-                        endTime: character.dodgeEndTime
-                    }
-                }));
-            }
         }
 
         // 플레이어 이동
@@ -1047,7 +998,7 @@
                     player.health = 1;
                     // displayHealth는 애니메이션으로 자동 업데이트됨
                     player.isInvincible = true;
-                    player.invincibleEndTime = now + 2000; // 2초 무적
+                    player.invincibleEndTime = now + 1000; // 1초 무적
                 }
                 return; // 부활 중에는 이동 불가
             }
@@ -1055,6 +1006,35 @@
             // 무적 상태 체크
             if (player.isInvincible && now >= player.invincibleEndTime) {
                 player.isInvincible = false;
+            }
+
+            // 약화 상태 체크
+            if (player.isWeakened && now >= player.weakenEndTime) {
+                player.isWeakened = false;
+                // 약화는 총알 생성 시에만 데미지를 감소시키므로, damage 자체는 변경하지 않음
+            }
+
+            // 기절 상태 체크
+            if (player.isStunned && now >= player.stunEndTime) {
+                player.isStunned = false;
+            }
+
+            // 방어막 쿨타임 체크
+            if (player.hasShield && !player.shieldReady && now >= player.shieldCooldown) {
+                player.shieldReady = true;
+            }
+
+            // 재생: 1초마다 체력 0.1 회복
+            if (player.hasRegeneration) {
+                if (now - player.lastRegenTime >= 1000) {
+                    player.health = Math.min(player.health + 0.1, player.maxHealth);
+                    player.lastRegenTime = now;
+                }
+            }
+
+            // 기절 중에는 이동 불가
+            if (player.isStunned) {
+                return;
             }
 
             // 이동속도 감소 처리 (깊은 상처)
@@ -1091,6 +1071,31 @@
                 dy *= 0.707;
             }
 
+            // 거점확보: 위치 변화 체크
+            if (player.hasFortify) {
+                const moved = Math.abs(player.x - (player.lastPosition?.x || player.x)) > 0.1 || 
+                             Math.abs(player.y - (player.lastPosition?.y || player.y)) > 0.1;
+                
+                if (moved) {
+                    // 움직임: 거점 확보 해제
+                    player.isFortified = false;
+                    player.stationaryTime = 0;
+                    if (!player.lastPosition) player.lastPosition = { x: player.x, y: player.y };
+                    player.lastPosition.x = player.x;
+                    player.lastPosition.y = player.y;
+                } else {
+                    // 정지: 시간 누적
+                    if (!player.lastPosition) player.lastPosition = { x: player.x, y: player.y };
+                    player.stationaryTime += 16; // 약 60fps 기준
+                    
+                    // 3초(3000ms) 동안 정지하면 거점 확보
+                    if (player.stationaryTime >= 3000 && !player.isFortified) {
+                        player.isFortified = true;
+                        player.fortifyStartTime = now;
+                    }
+                }
+            }
+
             // 이동
             const newX = player.x + dx * currentSpeed;
             const newY = player.y + dy * currentSpeed;
@@ -1105,162 +1110,8 @@
 
             // 각도 계산 (마우스 방향)
             player.angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
-            
-            // 네트워크 멀티 플레이: 위치 동기화 (주기적으로 전송)
-            if (gameState.isNetworkMultiplayer && ws && ws.readyState === WebSocket.OPEN) {
-                // 매 프레임마다 전송하면 너무 많으므로, 일정 간격으로만 전송
-                if (!player.lastSyncTime || now - player.lastSyncTime > 50) { // 50ms마다 전송
-                    ws.send(JSON.stringify({
-                        type: 'playerAction',
-                        action: {
-                            type: 'move',
-                            x: player.x,
-                            y: player.y,
-                            angle: player.angle,
-                            health: player.health,
-                            ammo: player.ammo
-                        }
-                    }));
-                    player.lastSyncTime = now;
-                }
-            }
         }
 
-        // 플레이어 2 업데이트 (멀티 플레이)
-        function updatePlayer2() {
-            const now = Date.now();
-            
-            // 구르기 상태 체크
-            if (player2.isDodging) {
-                if (now >= player2.dodgeEndTime) {
-                    player2.x = player2.dodgeTargetX;
-                    player2.y = player2.dodgeTargetY;
-                    player2.isDodging = false;
-                    player2.dodgeTrail = [];
-                } else {
-                    const elapsed = now - player2.dodgeStartTime;
-                    const progress = Math.min(elapsed / 300, 1);
-                    player2.x = player2.dodgeStartX + (player2.dodgeTargetX - player2.dodgeStartX) * progress;
-                    player2.y = player2.dodgeStartY + (player2.dodgeTargetY - player2.dodgeStartY) * progress;
-                    if (!player2.dodgeTrail) player2.dodgeTrail = [];
-                    player2.dodgeTrail.push({ x: player2.x, y: player2.y, alpha: 0.3 });
-                    if (player2.dodgeTrail.length > 5) {
-                        player2.dodgeTrail.shift();
-                    }
-                }
-                return;
-            }
-
-            // 부활 처리
-            if (player2.isReviving) {
-                if (now >= player2.reviveTime) {
-                    player2.isReviving = false;
-                    player2.health = 1;
-                    player2.isInvincible = true;
-                    player2.invincibleEndTime = now + 2000;
-                }
-                return;
-            }
-
-            // 무적 상태 체크
-            if (player2.isInvincible && now >= player2.invincibleEndTime) {
-                player2.isInvincible = false;
-            }
-
-            // 이동속도 감소 처리 (깊은 상처)
-            let currentSpeed = player2.speed;
-            if (now < player2.slowEndTime) {
-                if (!player2.hasPurify) {
-                    currentSpeed *= 0.75;
-                }
-            }
-            
-            // 생존본능
-            if (player2.hasSurvivalInstinct && player2.health === 1) {
-                currentSpeed *= 1.5;
-            }
-            
-            // 회복계약
-            if (player2.hasRecoveryContract && !player2.hasRecoveryContractUsed && player2.health === 1) {
-                player2.health = Math.min(player2.health + 2, player2.maxHealth);
-                player2.hasRecoveryContractUsed = true;
-            }
-
-            // 이동 입력 처리
-            let dx = 0;
-            let dy = 0;
-            
-            if (gameState.isLocalMultiplayer) {
-                // 로컬 멀티플레이: 화살표 키 사용
-                if (keys['arrowup']) dy -= currentSpeed;
-                if (keys['arrowdown']) dy += currentSpeed;
-                if (keys['arrowleft']) dx -= currentSpeed;
-                if (keys['arrowright']) dx += currentSpeed;
-            } else {
-                // 네트워크 멀티플레이: WASD 사용 (기존 방식)
-                if (keys['w']) dy -= currentSpeed;
-                if (keys['s']) dy += currentSpeed;
-                if (keys['a']) dx -= currentSpeed;
-                if (keys['d']) dx += currentSpeed;
-            }
-
-            // 대각선 이동 속도 정규화
-            if (dx !== 0 && dy !== 0) {
-                dx *= 0.707;
-                dy *= 0.707;
-            }
-
-            // 이동 적용
-            player2.x = Math.max(player2.radius, Math.min(canvas.width - player2.radius, player2.x + dx));
-            player2.y = Math.max(player2.radius, Math.min(canvas.height - player2.radius, player2.y + dy));
-
-            // 각도 설정
-            if (gameState.isLocalMultiplayer) {
-                // 로컬 멀티플레이: 마우스 방향으로 조준
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-                const mouseCanvasX = (mouse.x - rect.left) * scaleX;
-                const mouseCanvasY = (mouse.y - rect.top) * scaleY;
-                player2.angle = Math.atan2(mouseCanvasY - player2.y, mouseCanvasX - player2.x);
-            } else {
-                // 네트워크 멀티플레이: 플레이어 방향으로 각도 설정
-                const dxToPlayer = player.x - player2.x;
-                const dyToPlayer = player.y - player2.y;
-                player2.angle = Math.atan2(dyToPlayer, dxToPlayer);
-            }
-
-            // 발사 처리
-            if (gameState.isLocalMultiplayer) {
-                // 로컬 멀티플레이: 우클릭으로 발사 (이벤트 리스너에서 처리)
-                // 여기서는 쿨타임만 체크
-            } else {
-                // 네트워크 멀티플레이: Space 키로 발사
-                if (keys[' '] && !player2.isReloading && !player2.isDodging && !gameState.isPaused && !gameState.isGameOver) {
-                    if (player2.ammo > 0 && now - player2.lastShot >= player2.shootCooldown) {
-                        shoot(player2);
-                    }
-                }
-            }
-
-            // 구르기 처리
-            if (gameState.isLocalMultiplayer) {
-                // 로컬 멀티플레이: Enter 키로 구르기
-                if (keys['enter'] && player2.hasDodge && !player2.isDodging && !gameState.isPaused && !gameState.isGameOver) {
-                    dodge(player2);
-                }
-            } else {
-                // 네트워크 멀티플레이: Shift 키로 구르기
-                if (keys['shift'] && player2.hasDodge && !player2.isDodging && !gameState.isPaused && !gameState.isGameOver) {
-                    dodge(player2);
-                }
-            }
-
-            // 자동 재장전
-            if (player2.ammo === 0 && !player2.isReloading) {
-                reload(player2);
-            }
-        }
 
         // AI 적 업데이트
         function updateEnemy() {
@@ -1273,7 +1124,7 @@
                     enemy.health = 1;
                     // displayHealth는 애니메이션으로 자동 업데이트됨
                     enemy.isInvincible = true;
-                    enemy.invincibleEndTime = now + 2000; // 2초 무적
+                    enemy.invincibleEndTime = now + 1000; // 1초 무적
                 }
                 return; // 부활 중에는 이동 불가
             }
@@ -1281,6 +1132,35 @@
             // 무적 상태 체크
             if (enemy.isInvincible && now >= enemy.invincibleEndTime) {
                 enemy.isInvincible = false;
+            }
+
+            // 약화 상태 체크
+            if (enemy.isWeakened && now >= enemy.weakenEndTime) {
+                enemy.isWeakened = false;
+                // 약화는 총알 생성 시에만 데미지를 감소시키므로, damage 자체는 변경하지 않음
+            }
+
+            // 기절 상태 체크
+            if (enemy.isStunned && now >= enemy.stunEndTime) {
+                enemy.isStunned = false;
+            }
+
+            // 방어막 쿨타임 체크
+            if (enemy.hasShield && !enemy.shieldReady && now >= enemy.shieldCooldown) {
+                enemy.shieldReady = true;
+            }
+
+            // 재생: 1초마다 체력 0.1 회복
+            if (enemy.hasRegeneration) {
+                if (now - enemy.lastRegenTime >= 1000) {
+                    enemy.health = Math.min(enemy.health + 0.1, enemy.maxHealth);
+                    enemy.lastRegenTime = now;
+                }
+            }
+
+            // 기절 중에는 이동 불가
+            if (enemy.isStunned) {
+                return;
             }
 
             // 이동속도 감소 처리 (깊은 상처)
@@ -1389,17 +1269,48 @@
                 }
 
                 // 충돌 체크
-                let target;
-                if (gameState.isMultiplayer) {
-                    target = character === player ? player2 : player;
-                } else {
-                    target = character === player ? enemy : player;
-                }
+                let target = character === player ? enemy : player;
                 if (checkCollision(bullet, target)) {
                     // 구르는 중이거나 무적 상태면 데미지 무시
                     if (target.isDodging || target.isInvincible || target.isReviving) {
                         character.bullets.splice(i, 1);
                         continue;
+                    }
+
+                    // 방어막: 데미지 1회 무시 (쿨타임 5초)
+                    if (target.hasShield && target.shieldReady) {
+                        target.shieldReady = false;
+                        target.shieldCooldown = Date.now() + 5000; // 5초 쿨타임
+                        character.bullets.splice(i, 1);
+                        // "무시" 텍스트 표시
+                        target.damageNumbers.push({
+                            x: target.x,
+                            y: target.y,
+                            damage: 0,
+                            isCritical: false,
+                            isShield: true, // 방어막 무시 여부
+                            startTime: Date.now(),
+                            duration: 1000,
+                            offsetY: 0
+                        });
+                        continue; // 데미지 적용 안 함
+                    }
+
+                    // 유령 증강: 25% 확률로 공격 무시
+                    if (target.hasGhost && Math.random() < 0.25) {
+                        // 총알이 관통하고 지나감 (총알 제거하지 않음)
+                        // "무시" 텍스트 표시
+                        target.damageNumbers.push({
+                            x: target.x,
+                            y: target.y,
+                            damage: 0,
+                            isCritical: false,
+                            isGhost: true, // 유령 무시 여부
+                            startTime: Date.now(),
+                            duration: 1000,
+                            offsetY: 0
+                        });
+                        continue; // 총알은 계속 진행, 데미지 적용 안 함
                     }
 
                     // 크리티컬 계산 (25% 확률로 데미지 2배)
@@ -1417,6 +1328,33 @@
                         target.isVulnerable = false; // 취약 상태 해제
                     }
 
+                    // 거점확보: 데미지 *0.5
+                    if (target.hasFortify && target.isFortified) {
+                        finalDamage *= 0.5;
+                    }
+
+                    // 과열: 연속 히트 시 데미지 배율 적용
+                    if (character.hasOverheat) {
+                        const now = Date.now();
+                        // 2초 이내에 히트하면 연속 히트로 간주
+                        if (now - character.lastHitTime < 2000) {
+                            character.overheatHitCount++;
+                        } else {
+                            // 2초 이상 지나면 초기화
+                            character.overheatHitCount = 0;
+                        }
+                        // 데미지 배율: 1 + hitCount * 0.5 (첫번째는 1배, 두번째는 1.5배, 세번째는 2배...)
+                        finalDamage *= (1 + character.overheatHitCount * 0.5);
+                        character.lastHitTime = now;
+                    }
+
+                    // 약화: 상대에게 약화 상태 부여 (3초 동안 데미지 -0.25, 중첩 안됨)
+                    if (character.hasWeaken && !target.isWeakened) {
+                        target.isWeakened = true;
+                        target.weakenEndTime = Date.now() + 3000;
+                        // 데미지 감소 적용 (원래 데미지 저장 필요 없음, 발사 시 적용)
+                    }
+
                     target.health -= finalDamage;
                     character.bullets.splice(i, 1);
 
@@ -1430,6 +1368,23 @@
                         duration: 1000, // 1초 동안 표시
                         offsetY: 0 // 위로 올라가는 오프셋
                     });
+
+                    // 번개: 25% 확률로 적 0.75초 기절
+                    if (character.hasLightning && Math.random() < 0.25) {
+                        target.isStunned = true;
+                        target.stunEndTime = Date.now() + 750; // 0.75초
+                        // 기절 텍스트 표시 (데미지 숫자 위에 표시)
+                        target.damageNumbers.push({
+                            x: target.x,
+                            y: target.y,
+                            damage: 0,
+                            isCritical: false,
+                            isStunned: true, // 기절 여부
+                            startTime: Date.now(),
+                            duration: 1000,
+                            offsetY: -40 // 데미지 숫자 위에 표시
+                        });
+                    }
 
                     // 깊은 상처 (피격 시 상대 이동속도 -25% (0.5초))
                     // 정화 증강이 있으면 상태이상 무시
@@ -1464,11 +1419,7 @@
                             target.isReviving = true;
                             target.reviveTime = Date.now() + 2000;
                         } else {
-                            if (gameState.isMultiplayer) {
-                                endRound(character === player ? 'player' : 'player2');
-                        } else {
                             endRound(character === player ? 'player' : 'enemy');
-                            }
                         }
                     }
                     // 체력이 음수가 되지 않도록
@@ -1486,44 +1437,31 @@
 
             if (winner === 'player') {
                 gameState.playerWins++;
-            } else if (winner === 'player2') {
-                gameState.enemyWins++; // player2 승리는 enemyWins로 카운트
             } else {
                 gameState.enemyWins++;
             }
 
             // 승리 체크
             if (gameState.playerWins >= gameState.winsNeeded || gameState.enemyWins >= gameState.winsNeeded) {
-                const finalWinner = winner === 'player' ? 'player' : (winner === 'player2' ? 'player2' : 'enemy');
+                const finalWinner = winner === 'player' ? 'player' : 'enemy';
                 endGame(finalWinner);
                 return;
             }
 
             // 라운드 종료 체크
             if (gameState.round >= gameState.maxRounds) {
-                const finalWinner = gameState.playerWins > gameState.enemyWins ? 'player' : (gameState.isMultiplayer ? 'player2' : 'enemy');
+                const finalWinner = gameState.playerWins > gameState.enemyWins ? 'player' : 'enemy';
                 endGame(finalWinner);
                 return;
             }
 
             // 패배자가 증강 선택, 승리자는 확인만
             if (winner === 'player') {
-                // 플레이어 승리: 화면에 "상대가 선택중입니다" 텍스트만 표시
-                if (gameState.isMultiplayer) {
-                    // 멀티 플레이: player2가 선택
-                    gameState.showOpponentSelecting = true;
-                    // player2는 실제 플레이어이므로 모달 표시 (임시로 처리)
-                    setTimeout(() => {
-                        gameState.showOpponentSelecting = false;
-                        showAugmentModal(player2);
-                    }, 1000);
-                } else {
-                    // 솔로 플레이: AI가 선택
+                // 플레이어 승리: AI가 선택
                     gameState.showOpponentSelecting = true;
             selectAugmentForEnemy();
-                }
             } else {
-                // player2 또는 enemy 승리: 플레이어는 선택
+                // enemy 승리: 플레이어는 선택
                 showAugmentModal(player);
             }
         }
@@ -1544,7 +1482,9 @@
             
             // 3초 대기 후 선택
             setTimeout(() => {
-                const shuffled = [...augmentations].sort(() => Math.random() - 0.5);
+                // AI는 구르기와 거점확보 증강을 뽑지 않음
+                const availableAugments = augmentations.filter(aug => aug.id !== 'dodge' && aug.id !== 'fortify');
+                const shuffled = [...availableAugments].sort(() => Math.random() - 0.5);
                 const selectedAugment = shuffled[0]; // 랜덤으로 하나 선택
                 selectedAugment.effect(enemy);
                 enemy.augmentations.push(selectedAugment);
@@ -1701,36 +1641,49 @@
             player.hasRecoveryContractUsed = false; // 회복계약 초기화
             player.isVulnerable = false;
             player.vulnerabilityUsed = false;
+            player.isStunned = false;
+            player.stunEndTime = 0;
+            player.shieldReady = true; // 방어막 준비 상태로 초기화
+            player.shieldCooldown = 0;
+            player.isWeakened = false;
+            player.weakenEndTime = 0;
+            player.lastRegenTime = Date.now(); // 재생 시작 시간
 
-            // 적 또는 플레이어 2 상태 초기화
-            const opponent = gameState.isMultiplayer ? player2 : enemy;
-            opponent.x = canvas.width * 0.8;
-            opponent.y = canvas.height * 0.5;
-            opponent.health = opponent.maxHealth;
-            opponent.displayHealth = opponent.maxHealth;
-            opponent.ammo = opponent.maxAmmo;
-            opponent.bullets = [];
-            opponent.isReloading = false;
-            opponent.isDodging = false;
-            opponent.dodgeStartTime = 0;
-            opponent.dodgeEndTime = 0;
-            opponent.dodgeStartX = 0;
-            opponent.dodgeStartY = 0;
-            opponent.dodgeTargetX = 0;
-            opponent.dodgeTargetY = 0;
-            opponent.dodgeTrail = [];
-            opponent.lastDodgeTime = 0;
-            opponent.isReviving = false;
-            opponent.reviveTime = 0;
-            opponent.hasRevived = false; // 부활 사용 여부 초기화
-            opponent.isInvincible = false;
-            opponent.invincibleEndTime = 0;
-            opponent.slowEndTime = 0;
-            opponent.damageNumbers = [];
-            opponent.poisonEffects = [];
-            opponent.hasRecoveryContractUsed = false; // 회복계약 초기화
-            opponent.isVulnerable = false;
-            opponent.vulnerabilityUsed = false;
+            // 적 상태 초기화
+            enemy.x = canvas.width * 0.8;
+            enemy.y = canvas.height * 0.5;
+            enemy.health = enemy.maxHealth;
+            enemy.displayHealth = enemy.maxHealth;
+            enemy.ammo = enemy.maxAmmo;
+            enemy.bullets = [];
+            enemy.isReloading = false;
+            enemy.isDodging = false;
+            enemy.dodgeStartTime = 0;
+            enemy.dodgeEndTime = 0;
+            enemy.dodgeStartX = 0;
+            enemy.dodgeStartY = 0;
+            enemy.dodgeTargetX = 0;
+            enemy.dodgeTargetY = 0;
+            enemy.dodgeTrail = [];
+            enemy.lastDodgeTime = 0;
+            enemy.isReviving = false;
+            enemy.reviveTime = 0;
+            enemy.hasRevived = false; // 부활 사용 여부 초기화
+            enemy.isInvincible = false;
+            enemy.invincibleEndTime = 0;
+            enemy.slowEndTime = 0;
+            enemy.damageNumbers = [];
+            enemy.poisonEffects = [];
+            enemy.hasRecoveryContractUsed = false; // 회복계약 초기화
+            enemy.isVulnerable = false;
+            enemy.vulnerabilityUsed = false;
+            enemy.isStunned = false;
+            enemy.stunEndTime = 0;
+            enemy.shieldReady = true; // 방어막 준비 상태로 초기화
+            enemy.shieldCooldown = 0;
+            enemy.isWeakened = false;
+            enemy.weakenEndTime = 0;
+            enemy.lastRegenTime = Date.now(); // 재생 시작 시간
 
             // 3초 카운트다운 시작 (게임 완전히 멈춤)
             gameState.countdown = 3;
@@ -1754,13 +1707,9 @@
             const message = document.getElementById('gameOverMessage');
 
             if (winner === 'player') {
-                title.textContent = '플레이어 1 승리!';
+                title.textContent = '승리!';
                 title.style.color = '#4a9eff';
                 message.textContent = `축하합니다! ${gameState.playerWins}승으로 승리하셨습니다!`;
-            } else if (winner === 'player2') {
-                title.textContent = '플레이어 2 승리!';
-                title.style.color = '#e94560';
-                message.textContent = `축하합니다! ${gameState.enemyWins}승으로 승리하셨습니다!`;
             } else {
                 title.textContent = '패배';
                 title.style.color = '#e94560';
@@ -1813,6 +1762,30 @@
             player.hasRecoveryContractUsed = false;
             player.hasPurify = false;
             player.hasFocusedFire = false;
+            player.hasShotgun = false;
+            player.hasRagged = false;
+            player.hasGhost = false;
+            player.hasFortify = false;
+            player.isFortified = false;
+            player.fortifyStartTime = 0;
+            player.lastPosition = { x: player.x, y: player.y };
+            player.stationaryTime = 0;
+            player.hasOverheat = false;
+            player.overheatHitCount = 0;
+            player.lastHitTime = 0;
+            player.hasGamble = false;
+            player.hasWeaken = false;
+            player.isWeakened = false;
+            player.weakenEndTime = 0;
+            player.hasDamageBoost = false;
+            player.hasLightning = false;
+            player.isStunned = false;
+            player.stunEndTime = 0;
+            player.hasShield = false;
+            player.shieldReady = false;
+            player.shieldCooldown = 0;
+            player.hasRegeneration = false;
+            player.lastRegenTime = 0;
             player.isVulnerable = false;
             player.vulnerabilityUsed = false;
             player.poisonEffects = [];
@@ -2258,6 +2231,194 @@
                     ctx.arc(size * 0.15, 0, size * 0.1, 0, Math.PI * 2);
                     ctx.fill();
                     break;
+                case 'ghost':
+                    // 유령: 반투명 원 + 작은 원들
+                    ctx.globalAlpha = 0.7;
+                    ctx.fillStyle = '#cccccc';
+                    ctx.beginPath();
+                    ctx.arc(0, -size * 0.1, size * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                    // 작은 원들 (유령 느낌)
+                    ctx.beginPath();
+                    ctx.arc(-size * 0.15, size * 0.1, size * 0.15, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(size * 0.15, size * 0.1, size * 0.15, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                    break;
+                case 'fortify':
+                    // 거점확보: 방패 모양
+                    ctx.fillStyle = '#ffffff';
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+                    // 방패 본체
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.4);
+                    ctx.lineTo(-size * 0.3, -size * 0.2);
+                    ctx.lineTo(-size * 0.3, size * 0.2);
+                    ctx.lineTo(0, size * 0.3);
+                    ctx.lineTo(size * 0.3, size * 0.2);
+                    ctx.lineTo(size * 0.3, -size * 0.2);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    // 십자가
+                    ctx.strokeStyle = '#000000';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.2);
+                    ctx.lineTo(0, size * 0.1);
+                    ctx.moveTo(-size * 0.15, -size * 0.05);
+                    ctx.lineTo(size * 0.15, -size * 0.05);
+                    ctx.stroke();
+                    break;
+                case 'overheat':
+                    // 과열: 불꽃 모양
+                    ctx.fillStyle = '#ff6600';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.4);
+                    ctx.lineTo(-size * 0.2, -size * 0.1);
+                    ctx.lineTo(-size * 0.15, size * 0.1);
+                    ctx.lineTo(0, size * 0.2);
+                    ctx.lineTo(size * 0.15, size * 0.1);
+                    ctx.lineTo(size * 0.2, -size * 0.1);
+                    ctx.closePath();
+                    ctx.fill();
+                    // 작은 불꽃들
+                    ctx.fillStyle = '#ffaa00';
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.1, -size * 0.2);
+                    ctx.lineTo(-size * 0.05, 0);
+                    ctx.lineTo(0, -size * 0.1);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.1, -size * 0.2);
+                    ctx.lineTo(size * 0.05, 0);
+                    ctx.lineTo(0, -size * 0.1);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 'gamble':
+                    // 도박: 주사위 모양
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-size * 0.3, -size * 0.3, size * 0.6, size * 0.6);
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-size * 0.3, -size * 0.3, size * 0.6, size * 0.6);
+                    // 주사위 눈
+                    ctx.fillStyle = '#000000';
+                    ctx.beginPath();
+                    ctx.arc(-size * 0.15, -size * 0.15, size * 0.05, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(size * 0.15, size * 0.15, size * 0.05, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 'weaken':
+                    // 약화: 아래 화살표
+                    ctx.fillStyle = '#888888';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.3);
+                    ctx.lineTo(-size * 0.2, size * 0.1);
+                    ctx.lineTo(0, 0);
+                    ctx.lineTo(size * 0.2, size * 0.1);
+                    ctx.closePath();
+                    ctx.fill();
+                    // 감소 표시
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.15, size * 0.2);
+                    ctx.lineTo(size * 0.15, size * 0.2);
+                    ctx.stroke();
+                    break;
+                case 'damageBoost':
+                    // 데미지 1.2배: 위 화살표
+                    ctx.fillStyle = '#ff6600';
+                    ctx.beginPath();
+                    ctx.moveTo(0, size * 0.3);
+                    ctx.lineTo(-size * 0.2, -size * 0.1);
+                    ctx.lineTo(0, 0);
+                    ctx.lineTo(size * 0.2, -size * 0.1);
+                    ctx.closePath();
+                    ctx.fill();
+                    // 증가 표시
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.15, -size * 0.2);
+                    ctx.lineTo(size * 0.15, -size * 0.2);
+                    ctx.stroke();
+                    break;
+                case 'lightning':
+                    // 번개: 번개 모양
+                    ctx.fillStyle = '#ffff00';
+                    ctx.strokeStyle = '#ffaa00';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.1, -size * 0.4);
+                    ctx.lineTo(size * 0.1, -size * 0.2);
+                    ctx.lineTo(-size * 0.05, -size * 0.1);
+                    ctx.lineTo(size * 0.15, size * 0.2);
+                    ctx.lineTo(-size * 0.1, size * 0.3);
+                    ctx.lineTo(0, size * 0.1);
+                    ctx.lineTo(-size * 0.05, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    break;
+                case 'shield':
+                    // 방어막: 방패 모양
+                    ctx.fillStyle = '#0066ff';
+                    ctx.strokeStyle = '#0044cc';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.4);
+                    ctx.lineTo(-size * 0.3, -size * 0.2);
+                    ctx.lineTo(-size * 0.3, size * 0.1);
+                    ctx.lineTo(0, size * 0.3);
+                    ctx.lineTo(size * 0.3, size * 0.1);
+                    ctx.lineTo(size * 0.3, -size * 0.2);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.stroke();
+                    break;
+                case 'regeneration':
+                    // 재생: 하트 + 플러스
+                    ctx.fillStyle = '#ff006e';
+                    ctx.beginPath();
+                    ctx.moveTo(0, size * 0.1);
+                    ctx.bezierCurveTo(0, -size * 0.1, -size * 0.25, -size * 0.1, -size * 0.25, size * 0.1);
+                    ctx.bezierCurveTo(-size * 0.25, size * 0.3, 0, size * 0.5, 0, size * 0.5);
+                    ctx.bezierCurveTo(0, size * 0.5, size * 0.25, size * 0.3, size * 0.25, size * 0.1);
+                    ctx.bezierCurveTo(size * 0.25, -size * 0.1, 0, -size * 0.1, 0, size * 0.1);
+                    ctx.fill();
+                    // 플러스 표시
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(-size * 0.1, -size * 0.05, size * 0.2, size * 0.03);
+                    ctx.fillRect(-size * 0.05, -size * 0.1, size * 0.03, size * 0.2);
+                    break;
+                case 'shotgun':
+                    // 샷건: 산탄총 모양
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(-size * 0.4, -size * 0.1, size * 0.8, size * 0.2);
+                    ctx.fillStyle = '#654321';
+                    ctx.fillRect(-size * 0.35, -size * 0.05, size * 0.7, size * 0.1);
+                    break;
+                case 'ragged':
+                    // 오합지졸: 깨진 총알
+                    ctx.fillStyle = '#888888';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.2, -size * 0.2);
+                    ctx.lineTo(size * 0.2, size * 0.2);
+                    ctx.stroke();
+                    break;
                 default:
                     // 기본: 사각형
                     ctx.fillStyle = '#888888';
@@ -2451,289 +2612,8 @@
         // 게임 시작 함수들
         function startSoloGame() {
             gameState.isMenu = false;
-            gameState.isMultiplayer = false;
             document.getElementById('mainMenu').style.display = 'none';
             initGame();
-        }
-
-        function showMultiplayerMenu() {
-            document.getElementById('mainMenu').style.display = 'none';
-            document.getElementById('multiplayerMenu').style.display = 'flex';
-        }
-
-        function startLocalMultiplayer() {
-            gameState.isMenu = false;
-            gameState.isMultiplayer = true;
-            gameState.isLocalMultiplayer = true;
-            gameState.isNetworkMultiplayer = false;
-            document.getElementById('multiplayerMenu').style.display = 'none';
-            initGame();
-        }
-
-        function backToMainMenu() {
-            document.getElementById('multiplayerMenu').style.display = 'none';
-            document.getElementById('mainMenu').style.display = 'flex';
-            // 방 생성/입장 섹션 숨기기
-            document.getElementById('createRoomSection').style.display = 'none';
-            document.getElementById('joinRoomSection').style.display = 'none';
-            // WebSocket 연결 종료
-            if (ws) {
-                ws.close();
-                ws = null;
-            }
-        }
-
-        function backToMultiplayerMenu() {
-            document.getElementById('createRoomSection').style.display = 'none';
-            document.getElementById('joinRoomSection').style.display = 'none';
-            // WebSocket 연결 종료
-            if (ws) {
-                ws.close();
-                ws = null;
-            }
-        }
-
-        // 랜덤 5자리 방 코드 생성
-        function generateRoomCode() {
-            return Math.floor(10000 + Math.random() * 90000).toString();
-        }
-
-        // 방 생성
-        function createRoom() {
-            const roomCode = generateRoomCode();
-            gameState.roomCode = roomCode;
-            gameState.isHost = true;
-            
-            // UI 업데이트
-            document.getElementById('roomCodeDisplay').textContent = roomCode;
-            document.getElementById('createRoomSection').style.display = 'block';
-            document.getElementById('createRoomStatus').textContent = '상대방을 기다리는 중...';
-            document.getElementById('createRoomStatus').className = 'status-message waiting';
-            
-            // WebSocket 연결
-            connectWebSocket();
-            
-            // 방 생성 메시지 전송
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'createRoom',
-                    roomCode: roomCode
-                }));
-            }
-        }
-
-        // 방 입장 UI 표시
-        function showJoinRoom() {
-            document.getElementById('joinRoomSection').style.display = 'block';
-            document.getElementById('roomCodeInput').value = '';
-            document.getElementById('joinRoomStatus').textContent = '';
-            document.getElementById('joinRoomStatus').className = 'status-message';
-        }
-
-        // 방 입장
-        function joinRoom() {
-            const roomCode = document.getElementById('roomCodeInput').value.trim();
-            
-            if (roomCode.length !== 5 || !/^\d{5}$/.test(roomCode)) {
-                document.getElementById('joinRoomStatus').textContent = '올바른 5자리 숫자를 입력하세요.';
-                document.getElementById('joinRoomStatus').className = 'status-message error';
-                return;
-            }
-            
-            gameState.roomCode = roomCode;
-            gameState.isHost = false;
-            
-            // UI 업데이트
-            document.getElementById('joinRoomStatus').textContent = '방에 입장하는 중...';
-            document.getElementById('joinRoomStatus').className = 'status-message waiting';
-            
-            // WebSocket 연결
-            connectWebSocket();
-            
-            // 방 입장 메시지 전송
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'joinRoom',
-                    roomCode: roomCode
-                }));
-            }
-        }
-
-        // WebSocket 연결
-        function connectWebSocket() {
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                return; // 이미 연결됨
-            }
-            
-            const wsUrl = getWebSocketURL();
-            console.log('WebSocket 연결 시도:', wsUrl);
-            ws = new WebSocket(wsUrl);
-            
-            ws.onopen = () => {
-                console.log('WebSocket 연결됨');
-                if (gameState.isHost) {
-                    // 방 생성 메시지 전송
-                    ws.send(JSON.stringify({
-                        type: 'createRoom',
-                        roomCode: gameState.roomCode
-                    }));
-                } else {
-                    // 방 입장 메시지 전송
-                    ws.send(JSON.stringify({
-                        type: 'joinRoom',
-                        roomCode: gameState.roomCode
-                    }));
-                }
-            };
-            
-            ws.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-                handleWebSocketMessage(message);
-            };
-            
-            ws.onerror = (error) => {
-                console.error('WebSocket 오류:', error);
-                const statusElement = gameState.isHost 
-                    ? document.getElementById('createRoomStatus')
-                    : document.getElementById('joinRoomStatus');
-                if (statusElement) {
-                    statusElement.textContent = '서버 연결 오류가 발생했습니다.';
-                    statusElement.className = 'status-message error';
-                }
-            };
-            
-            ws.onclose = () => {
-                console.log('WebSocket 연결 종료');
-            };
-        }
-
-        // WebSocket 메시지 처리
-        function handleWebSocketMessage(message) {
-            switch (message.type) {
-                case 'roomCreated':
-                    // 방 생성 성공
-                    document.getElementById('createRoomStatus').textContent = '방이 생성되었습니다. 상대방을 기다리는 중...';
-                    document.getElementById('createRoomStatus').className = 'status-message waiting';
-                    break;
-                    
-                case 'roomJoined':
-                    // 방 입장 성공
-                    document.getElementById('joinRoomStatus').textContent = '방에 입장했습니다. 게임 시작을 기다리는 중...';
-                    document.getElementById('joinRoomStatus').className = 'status-message success';
-                    break;
-                    
-                case 'roomNotFound':
-                    // 방을 찾을 수 없음
-                    document.getElementById('joinRoomStatus').textContent = '방을 찾을 수 없습니다.';
-                    document.getElementById('joinRoomStatus').className = 'status-message error';
-                    break;
-                    
-                case 'playerJoined':
-                    // 상대방이 입장함
-                    if (gameState.isHost) {
-                        document.getElementById('createRoomStatus').textContent = '상대방이 입장했습니다! 게임을 시작합니다...';
-                        document.getElementById('createRoomStatus').className = 'status-message success';
-                        // 게임 시작
-                        setTimeout(() => {
-                            startNetworkMultiplayerGame();
-                        }, 1000);
-                    }
-                    break;
-                    
-                case 'gameStart':
-                    // 게임 시작
-                    startNetworkMultiplayerGame();
-                    break;
-                    
-                case 'playerAction':
-                    // 상대방 액션 수신
-                    handlePlayerAction(message.data);
-                    break;
-                    
-                case 'gameState':
-                    // 게임 상태 동기화
-                    syncGameState(message.data);
-                    break;
-                    
-                default:
-                    console.log('알 수 없는 메시지 타입:', message.type);
-            }
-        }
-
-        // 네트워크 멀티 플레이 게임 시작
-        function startNetworkMultiplayerGame() {
-            gameState.isMenu = false;
-            gameState.isMultiplayer = true;
-            gameState.isNetworkMultiplayer = true;
-            document.getElementById('multiplayerMenu').style.display = 'none';
-            document.getElementById('createRoomSection').style.display = 'none';
-            document.getElementById('joinRoomSection').style.display = 'none';
-            initGame();
-        }
-
-        // 상대방 액션 처리
-        function handlePlayerAction(action) {
-            if (!gameState.isNetworkMultiplayer) return;
-            
-            switch (action.type) {
-                case 'move':
-                    // player2 위치 및 상태 업데이트
-                    if (player2) {
-                        player2.x = action.x;
-                        player2.y = action.y;
-                        player2.angle = action.angle;
-                        player2.health = action.health;
-                        player2.ammo = action.ammo;
-                    }
-                    break;
-                    
-                case 'shoot':
-                    // player2 발사 처리
-                    if (player2) {
-                        const bullet = new Bullet(
-                            action.x + Math.cos(action.angle) * player2.radius,
-                            action.y + Math.sin(action.angle) * player2.radius,
-                            action.angle,
-                            player2,
-                            false
-                        );
-                        player2.bullets.push(bullet);
-                        player2.ammo = action.ammo;
-                    }
-                    break;
-                    
-                case 'reload':
-                    // player2 재장전 처리
-                    if (player2) {
-                        player2.isReloading = true;
-                        player2.reloadStartTime = action.startTime;
-                        setTimeout(() => {
-                            player2.ammo = player2.maxAmmo;
-                            player2.isReloading = false;
-                            player2.reloadStartTime = 0;
-                        }, player2.reloadTime);
-                    }
-                    break;
-                    
-                case 'dodge':
-                    // player2 구르기 처리
-                    if (player2) {
-                        player2.isDodging = true;
-                        player2.dodgeStartX = action.startX;
-                        player2.dodgeStartY = action.startY;
-                        player2.dodgeTargetX = action.targetX;
-                        player2.dodgeTargetY = action.targetY;
-                        player2.dodgeStartTime = action.startTime;
-                        player2.dodgeEndTime = action.endTime;
-                        player2.dodgeTrail = [];
-                    }
-                    break;
-            }
-        }
-
-        // 게임 상태 동기화
-        function syncGameState(state) {
-            // 게임 상태 동기화 (필요시 구현)
         }
 
         function initGame() {
@@ -2777,6 +2657,30 @@
             player.hasRecoveryContractUsed = false;
             player.hasPurify = false;
             player.hasFocusedFire = false;
+            player.hasShotgun = false;
+            player.hasRagged = false;
+            player.hasGhost = false;
+            player.hasFortify = false;
+            player.isFortified = false;
+            player.fortifyStartTime = 0;
+            player.lastPosition = { x: player.x, y: player.y };
+            player.stationaryTime = 0;
+            player.hasOverheat = false;
+            player.overheatHitCount = 0;
+            player.lastHitTime = 0;
+            player.hasGamble = false;
+            player.hasWeaken = false;
+            player.isWeakened = false;
+            player.weakenEndTime = 0;
+            player.hasDamageBoost = false;
+            player.hasLightning = false;
+            player.isStunned = false;
+            player.stunEndTime = 0;
+            player.hasShield = false;
+            player.shieldReady = false;
+            player.shieldCooldown = 0;
+            player.hasRegeneration = false;
+            player.lastRegenTime = 0;
             player.isVulnerable = false;
             player.vulnerabilityUsed = false;
             player.poisonEffects = [];
@@ -2788,47 +2692,7 @@
             player.damage = 1;
             player.speed = 3;
 
-            if (gameState.isMultiplayer) {
-                // 멀티 플레이: player2 초기화
-                player2.x = canvas.width * 0.8;
-                player2.y = canvas.height * 0.5;
-                player2.health = 5;
-                player2.displayHealth = 5;
-                player2.maxHealth = 5;
-                player2.ammo = 6;
-                player2.maxAmmo = 6;
-                player2.bullets = [];
-                player2.augmentations = [];
-                player2.angle = Math.PI;
-                player2.bulletSpeedMultiplier = 1;
-                player2.bulletSizeMultiplier = 1;
-                player2.hasCritical = false;
-                player2.hasDoubleShot = false;
-                player2.hasDodge = false;
-                player2.hasRevive = false;
-                player2.hasRevived = false;
-                player2.hasDeepWound = false;
-                player2.hasOneShotOneKill = false;
-                player2.hasPoisonBullet = false;
-                player2.hasReloadHeal = false;
-                player2.hasSurvivalInstinct = false;
-                player2.hasLastBullet = false;
-                player2.hasRecoveryContract = false;
-                player2.hasRecoveryContractUsed = false;
-                player2.hasPurify = false;
-                player2.hasFocusedFire = false;
-                player2.isVulnerable = false;
-                player2.vulnerabilityUsed = false;
-                player2.poisonEffects = [];
-                player2.isDodging = false;
-                player2.isReviving = false;
-                player2.isInvincible = false;
-                player2.slowEndTime = 0;
-                player2.damageNumbers = [];
-                player2.damage = 1;
-                player2.speed = 2.5;
-            } else {
-                // 솔로 플레이: enemy 초기화
+            // enemy 초기화
                 enemy.x = canvas.width * 0.8;
                 enemy.y = canvas.height * 0.5;
                 enemy.health = 5;
@@ -2856,6 +2720,30 @@
                 enemy.hasRecoveryContractUsed = false;
                 enemy.hasPurify = false;
                 enemy.hasFocusedFire = false;
+            enemy.hasShotgun = false;
+            enemy.hasRagged = false;
+            enemy.hasGhost = false;
+            enemy.hasFortify = false;
+            enemy.isFortified = false;
+            enemy.fortifyStartTime = 0;
+            enemy.lastPosition = { x: enemy.x, y: enemy.y };
+            enemy.stationaryTime = 0;
+            enemy.hasOverheat = false;
+            enemy.overheatHitCount = 0;
+            enemy.lastHitTime = 0;
+            enemy.hasGamble = false;
+            enemy.hasWeaken = false;
+            enemy.isWeakened = false;
+            enemy.weakenEndTime = 0;
+            enemy.hasDamageBoost = false;
+            enemy.hasLightning = false;
+            enemy.isStunned = false;
+            enemy.stunEndTime = 0;
+            enemy.hasShield = false;
+            enemy.shieldReady = false;
+            enemy.shieldCooldown = 0;
+            enemy.hasRegeneration = false;
+            enemy.lastRegenTime = 0;
                 enemy.isVulnerable = false;
                 enemy.vulnerabilityUsed = false;
                 enemy.poisonEffects = [];
@@ -2866,7 +2754,7 @@
                 enemy.damageNumbers = [];
                 enemy.damage = 1;
                 enemy.speed = 2.5;
-            }
+            enemy.reloadTime = 3000;
 
             // 첫 라운드 카운트다운 시작
             const initialCountdown = setInterval(() => {
@@ -2923,11 +2811,7 @@
 
             // 총알 그리기
             player.bullets.forEach(bullet => bullet.draw());
-            if (gameState.isMultiplayer) {
-                player2.bullets.forEach(bullet => bullet.draw());
-            } else {
             enemy.bullets.forEach(bullet => bullet.draw());
-            }
 
             // 구르기 잔상 그리기
             function drawDodgeTrail(character) {
@@ -2954,37 +2838,60 @@
             // 무적 상태일 때 반투명
             if (player.isInvincible || player.isReviving) {
                 ctx.globalAlpha = 0.5;
+            } else if (player.hasGhost) {
+                // 유령 증강: 살짝 흐려지게
+                ctx.globalAlpha = 0.7;
             }
             
             ctx.fillStyle = player.color;
             ctx.beginPath();
             ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
             ctx.fill();
+            // 거점확보: 하얀색 테두리
+            if (player.hasFortify && player.isFortified) {
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+            // 방어막: 진한 파란색 테두리
+            if (player.hasShield && player.shieldReady) {
+                ctx.strokeStyle = '#0066ff'; // 진한 파란색
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
             // 리볼버 그리기
             ctx.fillStyle = '#333'; // 파스텔 그레이
             ctx.fillRect(player.radius - 7.5, -4.5, 22.5, 9); // 1.5배 증가
             ctx.globalAlpha = 1.0;
             ctx.restore();
 
-            // 적 또는 플레이어 2 그리기
-            const opponentDraw = gameState.isMultiplayer ? player2 : enemy;
-            drawDodgeTrail(opponentDraw);
+            // 적 그리기
+            drawDodgeTrail(enemy);
             ctx.save();
-            ctx.translate(opponentDraw.x, opponentDraw.y);
-            ctx.rotate(opponentDraw.angle);
+            ctx.translate(enemy.x, enemy.y);
+            ctx.rotate(enemy.angle);
             
             // 무적 상태일 때 반투명
-            if (opponentDraw.isInvincible || opponentDraw.isReviving) {
+            if (enemy.isInvincible || enemy.isReviving) {
                 ctx.globalAlpha = 0.5;
+            } else if (enemy.hasGhost) {
+                // 유령 증강: 살짝 흐려지게
+                ctx.globalAlpha = 0.7;
             }
             
-            ctx.fillStyle = opponentDraw.color;
+            ctx.fillStyle = enemy.color;
             ctx.beginPath();
-            ctx.arc(0, 0, opponentDraw.radius, 0, Math.PI * 2);
+            ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2);
             ctx.fill();
+            // 방어막: 진한 파란색 테두리
+            if (enemy.hasShield && enemy.shieldReady) {
+                ctx.strokeStyle = '#0066ff'; // 진한 파란색
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
             // 리볼버 그리기
             ctx.fillStyle = '#333'; // 파스텔 그레이
-            ctx.fillRect(opponentDraw.radius - 7.5, -4.5, 22.5, 9); // 1.5배 증가
+            ctx.fillRect(enemy.radius - 7.5, -4.5, 22.5, 9); // 1.5배 증가
             ctx.globalAlpha = 1.0;
             ctx.restore();
 
@@ -2995,11 +2902,7 @@
             ctx.save();
             ctx.translate(shakeX, shakeY);
             drawDamageNumbers(player);
-            if (gameState.isMultiplayer) {
-                drawDamageNumbers(player2);
-            } else {
                 drawDamageNumbers(enemy);
-            }
             ctx.restore();
 
             // UI 요소들 (흔들림의 영향을 받지 않음)
@@ -3050,20 +2953,19 @@
                 drawReloadBar(player, player.x - 40 + shakeX, player.y - 40 + shakeY); // 캐릭터 크기 증가에 맞춰 조정
             }
             
-            // 적 또는 플레이어 2 체력 표시 (오른쪽 위)
-            const opponentUI = gameState.isMultiplayer ? player2 : enemy;
+            // 적 체력 표시 (오른쪽 위)
             const fixedBarWidth = 150; // 고정된 바 길이
             const enemyHealthX = canvas.width - fixedBarWidth - 20;
             const enemyHealthY = 20;
-            drawHealthHearts(opponentUI, enemyHealthX, enemyHealthY, false);
-            // 적 또는 플레이어 2 탄환수 표시 (체력 아래, 오른쪽 정렬 - 원으로)
+            drawHealthHearts(enemy, enemyHealthX, enemyHealthY, false);
+            // 적 탄환수 표시 (체력 아래, 오른쪽 정렬 - 원으로)
             const enemyAmmoY = enemyHealthY + 40;
-            drawAmmoCount(opponentUI, enemyHealthX + fixedBarWidth, enemyAmmoY, 'right');
-            // 적 또는 플레이어 2 증강 아이콘 표시 (탄환 아래)
-            drawAugmentIcons(opponentUI, enemyHealthX + fixedBarWidth, enemyAmmoY + 50, 'right');
-            // 적 또는 플레이어 2 재장전 바 표시 (적 바로 오른쪽 위) - 흔들림 적용
-            if (opponentUI.isReloading) {
-                drawReloadBar(opponentUI, opponentUI.x + 40 + shakeX, opponentUI.y - 40 + shakeY);
+            drawAmmoCount(enemy, enemyHealthX + fixedBarWidth, enemyAmmoY, 'right');
+            // 적 증강 아이콘 표시 (탄환 아래)
+            drawAugmentIcons(enemy, enemyHealthX + fixedBarWidth, enemyAmmoY + 50, 'right');
+            // 적 재장전 바 표시 (적 바로 오른쪽 위) - 흔들림 적용
+            if (enemy.isReloading) {
+                drawReloadBar(enemy, enemy.x + 40 + shakeX, enemy.y - 40 + shakeY);
             }
             
             // 증강 툴팁 표시
@@ -3162,11 +3064,7 @@
             
             // 독 효과 처리
             updatePoisonEffects(player);
-            if (gameState.isMultiplayer) {
-                updatePoisonEffects(player2);
-            } else {
                 updatePoisonEffects(enemy);
-            }
         }
         
         // 독 효과 업데이트
@@ -3184,7 +3082,30 @@
                 
                 // 1초마다 0.2 데미지 (정화 증강이 있으면 무시)
                 if (now - poison.lastDamageTime >= 1000 && !poison.target.hasPurify) {
-                    poison.target.health -= poison.damagePerSecond;
+                    // 유령 증강: 25% 확률로 독 데미지 무시
+                    if (poison.target.hasGhost && Math.random() < 0.25) {
+                        // "무시" 텍스트 표시
+                        poison.target.damageNumbers.push({
+                            x: poison.target.x,
+                            y: poison.target.y,
+                            damage: 0,
+                            isCritical: false,
+                            isGhost: true, // 유령 무시 여부
+                            startTime: now,
+                            duration: 1000,
+                            offsetY: 0
+                        });
+                        poison.lastDamageTime = now; // 다음 데미지 타이머 리셋
+                        continue; // 데미지 적용하지 않음
+                    }
+                    
+                    let poisonDamage = poison.damagePerSecond;
+                    // 거점확보: 데미지 *0.5
+                    if (poison.target.hasFortify && poison.target.isFortified) {
+                        poisonDamage *= 0.5;
+                    }
+                    
+                    poison.target.health -= poisonDamage;
                     poison.lastDamageTime = now;
                     
                     // 독 데미지 숫자 표시 (어두운 초록색)
@@ -3247,8 +3168,14 @@
                 ctx.save();
                 ctx.globalAlpha = alpha;
                 
-                // 색상 결정: 독 데미지면 어두운 초록색, 크리티컬이면 어두운 노란색, 아니면 하얀색
-                if (damageNum.isPoison) {
+                // 색상 결정: 방어막 무시면 진한 파란색, 유령 무시면 회색, 기절이면 노란색, 독 데미지면 어두운 초록색, 크리티컬이면 어두운 노란색, 아니면 하얀색
+                if (damageNum.isShield) {
+                    ctx.fillStyle = '#0066ff'; // 진한 파란색
+                } else if (damageNum.isGhost) {
+                    ctx.fillStyle = '#888888'; // 회색
+                } else if (damageNum.isStunned) {
+                    ctx.fillStyle = '#ffffff'; // 하얀색
+                } else if (damageNum.isPoison) {
                     ctx.fillStyle = '#006600'; // 어두운 초록색
                 } else if (damageNum.isCritical) {
                     ctx.fillStyle = '#CCAA00'; // 어두운 노란색
@@ -3259,9 +3186,17 @@
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 
-                // 캐릭터 위치 기준으로 데미지 숫자 표시
+                // 캐릭터 위치 기준으로 데미지 숫자 또는 특수 텍스트 표시
+                let displayText;
+                if (damageNum.isShield || damageNum.isGhost) {
+                    displayText = '무시';
+                } else if (damageNum.isStunned) {
+                    displayText = '기절';
+                } else {
+                    displayText = damageNum.damage.toString();
+                }
                 ctx.fillText(
-                    damageNum.damage.toString(),
+                    displayText,
                     damageNum.x,
                     damageNum.y + damageNum.offsetY
                 );
@@ -3273,7 +3208,8 @@
         // 게임 루프
         let lastTime = 0;
         function gameLoop(currentTime) {
-            if (!gameState.isPaused && !gameState.isGameOver) {
+            // 메뉴 화면이 아닐 때만 게임 로직 실행
+            if (!gameState.isMenu && !gameState.isPaused && !gameState.isGameOver) {
                 const deltaTime = currentTime - lastTime;
                 lastTime = currentTime;
 
@@ -3284,31 +3220,29 @@
 
                     // 시간 초과
                     if (gameState.gameTime <= 0) {
-                        const opponent = gameState.isMultiplayer ? player2 : enemy;
-                        if (player.health > opponent.health) {
+                        if (player.health > enemy.health) {
                             endRound('player');
-                        } else if (opponent.health > player.health) {
-                            endRound(gameState.isMultiplayer ? 'player2' : 'enemy');
+                        } else if (enemy.health > player.health) {
+                            endRound('enemy');
                         } else {
                             // 무승부 - 체력이 더 많은 쪽이 승리
-                            endRound(player.health >= opponent.health ? 'player' : (gameState.isMultiplayer ? 'player2' : 'enemy'));
+                            endRound(player.health >= enemy.health ? 'player' : 'enemy');
                         }
                     }
                 }
 
                 updatePlayer();
-                if (gameState.isMultiplayer) {
-                    updatePlayer2();
-                    updateBullets(player2);
-                } else {
                 updateEnemy();
                 updateBullets(enemy);
-                }
                 updateBullets(player);
             }
 
             draw();
+            
+            // 메뉴 화면이 아닐 때만 UI 업데이트
+            if (!gameState.isMenu) {
             updateUI();
+            }
 
             requestAnimationFrame(gameLoop);
         }
