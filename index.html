@@ -116,6 +116,122 @@
             margin-bottom: 20px;
         }
 
+        #collectionModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 15, 30, 1);
+            border: 3px solid #4a9eff;
+            border-radius: 15px;
+            padding: 30px;
+            z-index: 3000;
+            max-width: 800px;
+            width: 90%;
+            max-height: 90vh;
+            overflow: hidden;
+            pointer-events: auto;
+        }
+
+        #collectionModal h2 {
+            color: #4a9eff;
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        #controlsModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 15, 30, 1);
+            border: 3px solid #4a9eff;
+            border-radius: 15px;
+            padding: 30px;
+            z-index: 3001;
+            max-width: 700px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            pointer-events: auto;
+        }
+
+        #controlsModal h2 {
+            color: #4a9eff;
+            font-size: 32px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        #controlsModal .control-item {
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+
+        #controlsModal .control-item h3 {
+            color: #4a9eff;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+
+        #controlsModal .control-item p {
+            color: #ffffff;
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 5px 0;
+        }
+
+        #controlsModal .key {
+            display: inline-block;
+            padding: 5px 10px;
+            background: rgba(74, 158, 255, 0.3);
+            border: 1px solid #4a9eff;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 0 5px;
+        }
+
+        .collection-item {
+            background: rgba(74, 158, 255, 0.1);
+            border: 2px solid #4a9eff;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            transition: all 0.3s;
+        }
+
+        .collection-item.locked {
+            background: rgba(100, 100, 100, 0.1);
+            border-color: #666;
+            filter: grayscale(100%);
+            opacity: 0.5;
+        }
+
+        .collection-item h4 {
+            color: #4a9eff;
+            margin-bottom: 8px;
+            font-size: 20px;
+        }
+
+        .collection-item.locked h4 {
+            color: #666;
+        }
+
+        .collection-item p {
+            color: #ccc;
+            margin: 0;
+            font-size: 16px;
+        }
+
+        .collection-item.locked p {
+            color: #888;
+        }
+
         button {
             background: #e94560;
             color: white;
@@ -141,16 +257,157 @@
             background: rgba(15, 15, 30, 0.95);
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            justify-content: flex-start;
+            align-items: flex-start;
+            padding: 40px;
+            padding-top: 60px;
             z-index: 2000;
         }
 
         #mainMenu h1 {
-            font-size: 48px;
+            font-size: 100px;
             color: #e94560;
-            margin-bottom: 50px;
+            margin-bottom: 25px;
             text-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            animation: neonFlicker 1.67s ease-in-out;
+            animation-fill-mode: forwards;
+            opacity: 0;
+        }
+
+        @keyframes neonFlicker {
+            0% {
+                opacity: 0;
+                text-shadow: 0 0 5px rgba(233, 69, 96, 0.2);
+            }
+            20% {
+                opacity: 0.3;
+                text-shadow: 0 0 10px rgba(233, 69, 96, 0.4);
+            }
+            40% {
+                opacity: 0.1;
+                text-shadow: 0 0 5px rgba(233, 69, 96, 0.2);
+            }
+            60% {
+                opacity: 0.6;
+                text-shadow: 0 0 18px rgba(233, 69, 96, 0.6);
+            }
+            80% {
+                opacity: 0.3;
+                text-shadow: 0 0 10px rgba(233, 69, 96, 0.4);
+            }
+            100% {
+                opacity: 1;
+                text-shadow: 0 0 20px rgba(233, 69, 96, 0.5),
+                            0 0 40px rgba(233, 69, 96, 0.5),
+                            0 0 60px rgba(233, 69, 96, 0.3);
+            }
+        }
+
+        @keyframes neonFlickerLocked {
+            0% {
+                opacity: 0;
+                text-shadow: 0 0 5px rgba(136, 136, 136, 0.1);
+            }
+            20% {
+                opacity: 0.2;
+                text-shadow: 0 0 8px rgba(136, 136, 136, 0.2);
+            }
+            40% {
+                opacity: 0.1;
+                text-shadow: 0 0 5px rgba(136, 136, 136, 0.1);
+            }
+            60% {
+                opacity: 0.4;
+                text-shadow: 0 0 12px rgba(136, 136, 136, 0.3);
+            }
+            80% {
+                opacity: 0.2;
+                text-shadow: 0 0 8px rgba(136, 136, 136, 0.2);
+            }
+            100% {
+                opacity: 0.6;
+                text-shadow: 0 0 10px rgba(136, 136, 136, 0.3),
+                            0 0 20px rgba(136, 136, 136, 0.2),
+                            0 0 30px rgba(136, 136, 136, 0.1);
+            }
+        }
+
+        #soloPlayText {
+            font-size: 42px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5),
+                        0 0 20px rgba(255, 255, 255, 0.4),
+                        0 0 30px rgba(255, 255, 255, 0.3),
+                        0 0 40px rgba(255, 255, 255, 0.2);
+            margin-left: 12px;
+            display: block;
+            margin-top: 15px;
+        }
+
+        #soloPlayText:hover {
+            color: #4a9eff;
+            text-shadow: 0 0 10px rgba(74, 158, 255, 0.5),
+                        0 0 20px rgba(74, 158, 255, 0.5),
+                        0 0 40px rgba(74, 158, 255, 0.5),
+                        0 0 60px rgba(74, 158, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        #multiPlayText {
+            font-size: 42px;
+            color: #888;
+            cursor: not-allowed;
+            margin-left: 12px;
+            display: block;
+            margin-top: 15px;
+            opacity: 0.6;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3),
+                        0 0 20px rgba(255, 255, 255, 0.2),
+                        0 0 30px rgba(255, 255, 255, 0.1);
+        }
+
+        #settingsText {
+            font-size: 42px;
+            color: #888;
+            cursor: not-allowed;
+            margin-left: 12px;
+            display: block;
+            margin-top: 15px;
+            opacity: 0.6;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3),
+                        0 0 20px rgba(255, 255, 255, 0.2),
+                        0 0 30px rgba(255, 255, 255, 0.1);
+        }
+
+        .lock-icon {
+            filter: grayscale(100%);
+            opacity: 0.6;
+            margin-right: 4px;
+        }
+
+        .menu-text {
+            font-size: 42px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5),
+                        0 0 20px rgba(255, 255, 255, 0.4),
+                        0 0 30px rgba(255, 255, 255, 0.3),
+                        0 0 40px rgba(255, 255, 255, 0.2);
+            margin-left: 12px;
+            display: block;
+            margin-top: 15px;
+        }
+
+        .menu-text:hover {
+            color: #4a9eff;
+            text-shadow: 0 0 10px rgba(74, 158, 255, 0.5),
+                        0 0 20px rgba(74, 158, 255, 0.5),
+                        0 0 40px rgba(74, 158, 255, 0.5),
+                        0 0 60px rgba(74, 158, 255, 0.3);
+            transform: scale(1.05);
         }
 
         .menu-button {
@@ -223,16 +480,39 @@
         <div id="gameOverModal">
             <h2 id="gameOverTitle">게임 종료</h2>
             <p id="gameOverMessage" style="font-size: 20px; margin-bottom: 20px;"></p>
-            <button onclick="restartGame()">다시 시작</button>
+            <button onclick="restartGame()">메인메뉴로</button>
+        </div>
+
+        <div id="collectionModal">
+            <h2>도감</h2>
+            <div id="collectionContent" style="max-height: 70vh; overflow-y: auto; padding: 10px;"></div>
+            <button onclick="closeCollectionModal()" style="margin-top: 20px;">닫기</button>
+        </div>
+
+        <div id="controlsModal">
+            <h2>조작법</h2>
+            <div class="control-item">
+                <h3>이동</h3>
+                <p><span class="key">W</span> 위로 이동</p>
+                <p><span class="key">S</span> 아래로 이동</p>
+                <p><span class="key">A</span> 왼쪽으로 이동</p>
+                <p><span class="key">D</span> 오른쪽으로 이동</p>
+            </div>
+            <div class="control-item">
+                <h3>조준 및 발사</h3>
+                <p>마우스를 움직여 조준</p>
+                <p><span class="key">마우스 왼쪽 클릭</span> 발사</p>
+            </div>
+            <button onclick="closeControlsModal()" style="margin-top: 20px; padding: 10px 30px; background: #4a9eff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">닫기</button>
         </div>
 
         <div id="mainMenu">
             <h1>리볼버 듀얼</h1>
-            <button class="menu-button" onclick="startSoloGame()">솔로 플레이</button>
-            <div id="controlsInfo">
-                <h3>조작법</h3>
-                <p><strong>플레이어:</strong> WASD 이동, 마우스 조준, 좌클릭 발사, 우클릭 구르기</p>
-            </div>
+            <span id="soloPlayText" onclick="startSoloGame()">솔로 플레이</span>
+            <span id="multiPlayText"><span class="lock-icon">🔒</span>멀티 플레이</span>
+            <span class="menu-text" id="collectionText" onclick="openCollectionModal()">도감</span>
+            <span id="settingsText"><span class="lock-icon">🔒</span>설정</span>
+            <span class="menu-text" id="controlsText" onclick="openControlsModal()">조작법</span>
         </div>
 
     </div>
@@ -269,6 +549,8 @@
                 duration: 0
             }
         };
+
+        // 튜토리얼 상태
 
         // 플레이어
         const player = {
@@ -307,10 +589,9 @@
             hasLastBullet: false, // 비장의 한발
             hasRecoveryContract: false, // 회복계약
             hasRecoveryContractUsed: false, // 회복계약 사용 여부 (라운드당 한번)
-            hasPurify: false, // 정화
             hasFocusedFire: false, // 집중 사격
             hasShotgun: false, // 샷건
-            hasRagged: false, // 오합지졸
+            hasRagged: false, // 다다익선
             hasGhost: false, // 유령
             hasFortify: false, // 거점확보
             isFortified: false, // 거점 확보 상태
@@ -390,10 +671,9 @@
             hasLastBullet: false, // 비장의 한발
             hasRecoveryContract: false, // 회복계약
             hasRecoveryContractUsed: false, // 회복계약 사용 여부 (라운드당 한번)
-            hasPurify: false, // 정화
             hasFocusedFire: false, // 집중 사격
             hasShotgun: false, // 샷건
-            hasRagged: false, // 오합지졸
+            hasRagged: false, // 다다익선
             hasGhost: false, // 유령
             hasFortify: false, // 거점확보
             isFortified: false, // 거점 확보 상태
@@ -416,6 +696,15 @@
             shieldCooldown: 0, // 방어막 쿨타임
             hasRegeneration: false, // 재생
             lastRegenTime: 0, // 마지막 회복 시간
+            hasEvasiveManeuver: false, // 회피기동
+            hasCombatExperience: false, // 전투 경험
+            combatExperienceRounds: 0, // 전투 경험 라운드 수
+            hasHallucination: false, // 환각
+            hasTasteOfBlood: false, // 피의 맛
+            hasCannon: false, // 대포
+            hasTimeBarrier: false, // 시간장막
+            timeBarrierRadius: 150, // 시간장막 반지름
+            hasBouncyBullet: false, // 통통탄
             isVulnerable: false, // 취약 상태
             vulnerabilityUsed: false, // 취약 사용 여부
             poisonEffects: [], // 독 효과 배열 {target, startTime, duration, damagePerSecond}
@@ -435,6 +724,13 @@
             slowEndTime: 0,
             aiTimer: 0,
             aiDirection: Math.random() * Math.PI * 2,
+            usePrediction: false, // 발사 패턴: false=현재 위치, true=예측 위치
+            lastPlayerX: 0, // 플레이어 이전 위치 (이동 방향 계산용)
+            lastPlayerY: 0,
+            playerVelocity: { x: 0, y: 0 }, // 플레이어 이동 속도
+            lastPlayerBulletCount: 0, // 플레이어 총알 개수 추적 (발사 감지용)
+            bulletDodgeTargetY: 0, // 총알 회피 목표 Y 위치
+            isDodgingBullet: false, // 총알 회피 중인지
             damageNumbers: [] // 데미지 숫자 표시용
         };
 
@@ -485,10 +781,10 @@
             },
             { 
                 id: 'reload', 
-                name: '재장전 속도 -1초', 
-                description: '재장전 시간 -1초', 
+                name: '재장전 속도 -1.5초', 
+                description: '재장전 시간 -1.5초', 
                 effect: (character) => { 
-                    character.reloadTime = Math.max(1000, character.reloadTime - 1000); 
+                    character.reloadTime = Math.max(1000, character.reloadTime - 1500); 
                 } 
             },
             { 
@@ -518,7 +814,7 @@
             { 
                 id: 'revive', 
                 name: '부활', 
-                description: '죽었을 때 2초 후 체력 1로 부활 (2초 무적)', 
+                description: '죽었을 때 2초 후 체력 1로 부활 (1초 무적)', 
                 effect: (character) => { 
                     character.hasRevive = true; 
                 } 
@@ -565,7 +861,7 @@
             { 
                 id: 'poisonBullet', 
                 name: '독 탄환', 
-                description: '적 피격시 3초동안 1초마다 0.2데미지', 
+                description: '적 피격시 0.2데미지를 1초간격으로 2번 추가피해', 
                 effect: (character) => { 
                     character.hasPoisonBullet = true; 
                 } 
@@ -611,17 +907,9 @@
                 } 
             },
             { 
-                id: 'purify', 
-                name: '정화', 
-                description: '모든 상태이상 효과 무시', 
-                effect: (character) => { 
-                    character.hasPurify = true; 
-                } 
-            },
-            { 
                 id: 'focusedFire', 
                 name: '집중 사격', 
-                description: '피격시 25% 확률로 상대에게 취약 부여 (다음 데미지 *1.5배)', 
+                description: '피격시 50% 확률로 상대에게 취약 부여 (다음 데미지 *1.5배)', 
                 effect: (character) => { 
                     character.hasFocusedFire = true; 
                 } 
@@ -636,7 +924,7 @@
             },
             { 
                 id: 'ragged', 
-                name: '오합지졸', 
+                name: '다다익선', 
                 description: '최대 탄약 +3, 발사속도 -50%, 총알 데미지 *0.5', 
                 effect: (character) => { 
                     character.maxAmmo += 3; 
@@ -728,6 +1016,66 @@
                     character.lastRegenTime = 0; // 마지막 회복 시간
                 } 
             },
+            { 
+                id: 'evasiveManeuver', 
+                name: '회피기동', 
+                description: '재장전 중 이동속도 +50%', 
+                effect: (character) => { 
+                    character.hasEvasiveManeuver = true; 
+                } 
+            },
+            { 
+                id: 'combatExperience', 
+                name: '전투 경험', 
+                description: '진 라운드 수마다 최대체력 0.5, 데미지 0.1 증가', 
+                effect: (character) => { 
+                    character.hasCombatExperience = true; 
+                    character.combatExperienceRounds = 0; // 현재 라운드 수
+                } 
+            },
+            { 
+                id: 'hallucination', 
+                name: '환각', 
+                description: '총알이 날아가는 도중에 0.1초마다 속도가 0.75배~2배 사이로 랜덤으로 조정됨', 
+                effect: (character) => { 
+                    character.hasHallucination = true; 
+                } 
+            },
+            { 
+                id: 'tasteOfBlood', 
+                name: '피의 맛', 
+                description: '적에게 입힌 피해의 20%만큼 회복', 
+                effect: (character) => { 
+                    character.hasTasteOfBlood = true; 
+                } 
+            },
+            { 
+                id: 'cannon', 
+                name: '대포', 
+                description: '총알의 속도 -50% 대신 총알의 크기 +200%', 
+                effect: (character) => { 
+                    character.bulletSpeedMultiplier = (character.bulletSpeedMultiplier || 1) * 0.5; 
+                    character.bulletSizeMultiplier = (character.bulletSizeMultiplier || 1) * 3; // +200% = 3배
+                    character.hasCannon = true; 
+                } 
+            },
+            { 
+                id: 'timeBarrier', 
+                name: '시간장막', 
+                description: '자신 주위의 반지름 150px짜리 원 생성, 이 원 안에 들어오는 적의 총알 35% 둔화', 
+                effect: (character) => { 
+                    character.hasTimeBarrier = true; 
+                    character.timeBarrierRadius = 150; 
+                } 
+            },
+            { 
+                id: 'bouncyBullet', 
+                name: '통통탄', 
+                description: '총알이 벽에 맞으면 1회 튕김 (튕기는 방향은 맞은 방향의 반대방향에서 ±25도)', 
+                effect: (character) => { 
+                    character.hasBouncyBullet = true; 
+                } 
+            },
         ];
 
         // 키 입력 상태
@@ -774,6 +1122,16 @@
                 const baseSpeed = 20;
                 const speedMultiplier = owner.bulletSpeedMultiplier || 1;
                 this.speed = baseSpeed * speedMultiplier;
+                this.baseSpeed = this.speed; // 원래 속도 저장 (시간장막용)
+                // 환각: 날아가는 도중에 0.1초마다 속도 변경을 위한 변수
+                if (owner.hasHallucination) {
+                    this.hallucinationLastChange = Date.now(); // 마지막 속도 변경 시간
+                    // 초기 속도도 랜덤으로 설정 (0.75배~2배)
+                    const randomMultiplier = 0.75 + Math.random() * 1.25; // 0.75 ~ 2.0
+                    this.hallucinationSpeed = this.baseSpeed * randomMultiplier;
+                    this.speed = this.hallucinationSpeed; // 초기 속도는 환각 속도로
+                }
+                this.isInTimeBarrier = false; // 시간장막 안에 있는지 여부
                 const sizeMultiplier = owner.bulletSizeMultiplier || 1;
                 this.radius = 9 * sizeMultiplier;
                 this.owner = owner;
@@ -788,11 +1146,69 @@
                 }
                 this.isFreeShot = isFreeShot; // 탄약 소모 없는 총알 (더블샷용)
                 this.hasPoison = owner.hasPoisonBullet || false; // 독 탄환 여부
+                this.hasBouncy = owner.hasBouncyBullet || false; // 통통탄 여부
+                this.bounceCount = 0; // 튕김 횟수
+                this.lastX = x; // 이전 위치 (벽 충돌 감지용)
+                this.lastY = y;
             }
 
             update() {
-                this.x += Math.cos(this.angle) * this.speed;
-                this.y += Math.sin(this.angle) * this.speed;
+                // 환각: 날아가는 도중에 0.1초마다 총알 속도를 실시간으로 변경
+                if (this.owner && this.owner.hasHallucination && this.hallucinationLastChange !== undefined) {
+                    const now = Date.now();
+                    if (now - this.hallucinationLastChange >= 100) { // 0.1초 = 100ms
+                        // 0.75배~2배 사이로 랜덤 조정
+                        const randomMultiplier = 0.75 + Math.random() * 1.25; // 0.75 ~ 2.0
+                        this.hallucinationSpeed = this.baseSpeed * randomMultiplier;
+                        this.hallucinationLastChange = now;
+                    }
+                    // 환각 속도 사용 (시간장막이 적용되면 그게 우선이므로 시간장막 로직에서 처리)
+                    // 시간장막이 없거나 밖에 있을 때만 환각 속도 적용
+                    if (!this.isInTimeBarrier) {
+                        this.speed = this.hallucinationSpeed;
+                    }
+                }
+                
+                // 통통탄: 벽에 맞으면 튕김
+                if (this.hasBouncy && this.bounceCount < 1) {
+                    const nextX = this.x + Math.cos(this.angle) * this.speed;
+                    const nextY = this.y + Math.sin(this.angle) * this.speed;
+                    
+                    // 벽 충돌 감지
+                    let hitWall = false;
+                    let newAngle = this.angle;
+                    
+                    // 왼쪽 벽 또는 오른쪽 벽에 충돌
+                    if (nextX - this.radius < 0 || nextX + this.radius > canvas.width) {
+                        hitWall = true;
+                        // 반대방향에서 ±25도 (수평 반사)
+                        const reflectAngle = Math.PI - this.angle; // 반사각
+                        const randomOffset = (Math.random() - 0.5) * 50 * Math.PI / 180; // ±25도
+                        newAngle = reflectAngle + randomOffset;
+                    }
+                    // 위쪽 벽 또는 아래쪽 벽에 충돌
+                    if (nextY - this.radius < 0 || nextY + this.radius > canvas.height) {
+                        hitWall = true;
+                        // 반대방향에서 ±25도 (수직 반사)
+                        const reflectAngle = -this.angle; // 반사각
+                        const randomOffset = (Math.random() - 0.5) * 50 * Math.PI / 180; // ±25도
+                        newAngle = reflectAngle + randomOffset;
+                    }
+                    
+                    if (hitWall) {
+                        this.bounceCount++;
+                        this.angle = newAngle;
+                        // 벽 경계로 위치 조정
+                        this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+                        this.y = Math.max(this.radius, Math.min(canvas.height - this.radius, this.y));
+                    } else {
+                        this.x = nextX;
+                        this.y = nextY;
+                    }
+                } else {
+                    this.x += Math.cos(this.angle) * this.speed;
+                    this.y += Math.sin(this.angle) * this.speed;
+                }
             }
 
             draw() {
@@ -871,9 +1287,9 @@
                     if (character.hasGamble) {
                         bullet.damage = bulletDamage;
                     }
-                character.bullets.push(bullet);
-                character.ammo--;
-                character.lastShot = now;
+                    character.bullets.push(bullet);
+                    character.ammo--;
+                    character.lastShot = now;
 
                 // 더블샷 (25% 확률로 발사한 방향에 ±15도 사이에 추가 한발 발사)
                 if (character.hasDoubleShot && Math.random() < 0.25) {
@@ -892,7 +1308,7 @@
 
                 // 화면 흔들림 효과 (플레이어 발사 시에만)
                 if (character === player) {
-                    addScreenShake(12, 200);
+                    addScreenShake(18, 200);
                 }
 
                 // 자동 재장전
@@ -1040,10 +1456,12 @@
             // 이동속도 감소 처리 (깊은 상처)
             let currentSpeed = player.speed;
             if (now < player.slowEndTime) {
-                // 정화 증강이 있으면 상태이상 무시
-                if (!player.hasPurify) {
-                    currentSpeed *= 0.75; // -25%
-                }
+                currentSpeed *= 0.75; // -25%
+            }
+            
+            // 회피기동: 재장전 중 이동속도 +50%
+            if (player.hasEvasiveManeuver && player.isReloading) {
+                currentSpeed *= 1.5;
             }
             
             // 생존본능: 체력이 1일 때 이동속도 +50%
@@ -1064,6 +1482,7 @@
             if (keys['s']) dy += 1;
             if (keys['a']) dx -= 1;
             if (keys['d']) dx += 1;
+            
 
             // 대각선 이동 정규화
             if (dx !== 0 && dy !== 0) {
@@ -1166,10 +1585,12 @@
             // 이동속도 감소 처리 (깊은 상처)
             let currentSpeed = enemy.speed;
             if (now < enemy.slowEndTime) {
-                // 정화 증강이 있으면 상태이상 무시
-                if (!enemy.hasPurify) {
-                    currentSpeed *= 0.75; // -25%
-                }
+                currentSpeed *= 0.75; // -25%
+            }
+            
+            // 회피기동: 재장전 중 이동속도 +50%
+            if (enemy.hasEvasiveManeuver && enemy.isReloading) {
+                currentSpeed *= 1.5;
             }
             
             // 생존본능: 체력이 1일 때 이동속도 +50%
@@ -1185,6 +1606,54 @@
 
             enemy.aiTimer++;
 
+            // 플레이어가 총을 쏘는지 감지
+            const currentPlayerBulletCount = player.bullets.length;
+            if (currentPlayerBulletCount > enemy.lastPlayerBulletCount) {
+                // 플레이어가 총을 쐈음
+                const dodgeProbability = 0.5;
+                if (Math.random() < dodgeProbability) {
+                    // 50% 확률로 회피
+                    enemy.isDodgingBullet = true;
+                    // 위 또는 아래 중 한 방향 선택
+                    const dodgeDirection = Math.random() < 0.5 ? 1 : -1; // 1 = 아래, -1 = 위
+                    const dodgeDistance = 50;
+                    enemy.bulletDodgeTargetY = Math.max(
+                        enemy.radius,
+                        Math.min(
+                            canvas.height - enemy.radius,
+                            enemy.y + dodgeDirection * dodgeDistance
+                        )
+                    );
+                    // 현재 움직임 멈추기
+                    enemy.aiTimer = 0;
+                }
+            }
+            enemy.lastPlayerBulletCount = currentPlayerBulletCount;
+
+            // 총알 회피 중이면 목표 위치로 이동
+            if (enemy.isDodgingBullet) {
+                const dyToTarget = enemy.bulletDodgeTargetY - enemy.y;
+                if (Math.abs(dyToTarget) > 2) {
+                    // 목표 위치로 이동
+                    enemy.aiDirection = dyToTarget > 0 ? Math.PI / 2 : -Math.PI / 2; // 아래 또는 위
+                } else {
+                    // 목표 위치에 도달했으면 회피 종료
+                    enemy.isDodgingBullet = false;
+                    enemy.aiTimer = 0; // 새로운 방향 선택
+                }
+            }
+
+            // 플레이어 이동 방향 추적 (예측 발사용)
+            if (enemy.lastPlayerX === 0 && enemy.lastPlayerY === 0) {
+                enemy.lastPlayerX = player.x;
+                enemy.lastPlayerY = player.y;
+            }
+            // 플레이어 속도 계산 (프레임당 이동량)
+            enemy.playerVelocity.x = player.x - enemy.lastPlayerX;
+            enemy.playerVelocity.y = player.y - enemy.lastPlayerY;
+            enemy.lastPlayerX = player.x;
+            enemy.lastPlayerY = player.y;
+
             // 플레이어 방향으로 각도 설정
             const dxToPlayer = player.x - enemy.x;
             const dyToPlayer = player.y - enemy.y;
@@ -1194,24 +1663,30 @@
             const distance = Math.sqrt(dxToPlayer * dxToPlayer + dyToPlayer * dyToPlayer);
             const safeDistance = 500; // 안전 거리 (500px)
 
-            // 적 이동 패턴 개선 - 항상 활발하게 움직임
-            if (enemy.aiTimer > 30) { // 더 자주 방향 변경 (30프레임 = 약 0.5초)
+            const aiTimerThreshold = 30; // 원래대로 복구 (30프레임 = 약 0.5초)
+            
+            // 적 이동 패턴 개선 - 위아래로 더 자주 움직임 (회피 중이 아닐 때만)
+            if (!enemy.isDodgingBullet && enemy.aiTimer > aiTimerThreshold) {
                 let targetAngle;
                 
                 // 랜덤하게 다양한 움직임 패턴 사용
                 const movementPattern = Math.random();
                 
-                if (movementPattern < 0.3) {
-                    // 30% 확률: 플레이어 방향으로 이동
+                if (movementPattern < 0.2) {
+                    // 20% 확률: 플레이어 방향으로 이동
                     targetAngle = Math.atan2(dyToPlayer, dxToPlayer);
-                } else if (movementPattern < 0.5) {
-                    // 20% 확률: 플레이어 반대 방향으로 이동
+                } else if (movementPattern < 0.35) {
+                    // 15% 확률: 플레이어 반대 방향으로 이동
                     targetAngle = Math.atan2(-dyToPlayer, -dxToPlayer);
-                } else if (movementPattern < 0.7) {
-                    // 20% 확률: 측면 이동 (왼쪽/오른쪽)
+                } else if (movementPattern < 0.45) {
+                    // 10% 확률: 측면 이동 (왼쪽/오른쪽)
                     targetAngle = Math.atan2(dyToPlayer, dxToPlayer) + (Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2);
+                } else if (movementPattern < 0.75) {
+                    // 30% 확률: 위아래 이동 (플레이어 방향 기준 위/아래)
+                    const playerAngle = Math.atan2(dyToPlayer, dxToPlayer);
+                    targetAngle = playerAngle + (Math.random() < 0.5 ? Math.PI / 2 : -Math.PI / 2);
                 } else {
-                    // 30% 확률: 완전 랜덤 방향
+                    // 25% 확률: 완전 랜덤 방향
                     targetAngle = Math.random() * Math.PI * 2;
                 }
                 
@@ -1243,11 +1718,37 @@
             enemy.x = Math.max(enemy.radius, Math.min(canvas.width - enemy.radius, enemy.x + dx));
             enemy.y = Math.max(enemy.radius, Math.min(canvas.height - enemy.radius, enemy.y + dy));
 
-            // 플레이어가 범위 내에 있고 탄약이 있으면 발사 (더 공격적으로)
-            // 거리 제한을 크게 늘리고 발사 확률도 높임
+
+            // 플레이어가 범위 내에 있고 탄약이 있으면 발사
             const maxDistance = Math.max(canvas.width, canvas.height) * 0.8; // 화면 크기의 80%까지
-            if (distance < maxDistance && enemy.ammo > 0 && !enemy.isReloading && Math.random() < 0.05) {
+            const shootProbability = 0.05;
+            if (distance < maxDistance && enemy.ammo > 0 && !enemy.isReloading && Math.random() < shootProbability) {
+                // 플레이어가 움직이고 있는지 확인
+                const playerSpeed = Math.sqrt(enemy.playerVelocity.x * enemy.playerVelocity.x + enemy.playerVelocity.y * enemy.playerVelocity.y);
+                const isPlayerMoving = playerSpeed > 0.1; // 0.1px 이상 움직이면 움직이는 것으로 간주
+                
+                const originalAngle = enemy.angle;
+                const currentAngle = Math.atan2(dyToPlayer, dxToPlayer);
+                
+                // 플레이어가 멈춰있으면 항상 정확히 쏘고, 움직이면 70% 정확히, 30% ±5도 랜덤
+                if (!isPlayerMoving) {
+                    // 멈춰있을 때: 항상 정확히
+                    enemy.angle = currentAngle;
+                } else {
+                    // 움직일 때: 70% 정확히, 30% ±5도 랜덤
+                    if (Math.random() < 0.7) {
+                        // 70% 확률: 정확히 플레이어 위치
+                        enemy.angle = currentAngle;
+                    } else {
+                        // 30% 확률: ±5도 랜덤
+                        const randomOffset = (Math.random() - 0.5) * 10 * Math.PI / 180; // ±5도
+                        enemy.angle = currentAngle + randomOffset;
+                    }
+                }
+                
                 shoot(enemy);
+                // 발사 후 각도 복원 (이동 방향 유지)
+                enemy.angle = originalAngle;
             }
 
             // 자동 재장전
@@ -1260,6 +1761,48 @@
         function updateBullets(character) {
             for (let i = character.bullets.length - 1; i >= 0; i--) {
                 const bullet = character.bullets[i];
+                
+                // 시간장막: 적의 총알이 플레이어의 시간장막 안에 있으면 속도 35% 둔화
+                if (character === enemy && player.hasTimeBarrier) {
+                    const dx = bullet.x - player.x;
+                    const dy = bullet.y - player.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance <= player.timeBarrierRadius) {
+                        // 속도 65%로 설정 (35% 감소) - 환각이 있으면 환각 속도 기준으로
+                        const baseSpeedForBarrier = bullet.hallucinationSpeed !== undefined ? bullet.hallucinationSpeed : (bullet.baseSpeed || bullet.speed);
+                        bullet.speed = baseSpeedForBarrier * 0.65;
+                        bullet.isInTimeBarrier = true;
+                    } else {
+                        // 시간장막 밖으로 나가면 원래 속도로 복원 (환각이 있으면 환각 속도)
+                        bullet.isInTimeBarrier = false;
+                        if (bullet.hallucinationSpeed !== undefined) {
+                            bullet.speed = bullet.hallucinationSpeed;
+                        } else {
+                            bullet.speed = bullet.baseSpeed || bullet.speed;
+                        }
+                    }
+                }
+                // 시간장막: 플레이어의 총알이 적의 시간장막 안에 있으면 속도 35% 둔화
+                if (character === player && enemy.hasTimeBarrier) {
+                    const dx = bullet.x - enemy.x;
+                    const dy = bullet.y - enemy.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance <= enemy.timeBarrierRadius) {
+                        // 속도 65%로 설정 (35% 감소) - 환각이 있으면 환각 속도 기준으로
+                        const baseSpeedForBarrier = bullet.hallucinationSpeed !== undefined ? bullet.hallucinationSpeed : (bullet.baseSpeed || bullet.speed);
+                        bullet.speed = baseSpeedForBarrier * 0.65;
+                        bullet.isInTimeBarrier = true;
+                    } else {
+                        // 시간장막 밖으로 나가면 원래 속도로 복원 (환각이 있으면 환각 속도)
+                        bullet.isInTimeBarrier = false;
+                        if (bullet.hallucinationSpeed !== undefined) {
+                            bullet.speed = bullet.hallucinationSpeed;
+                        } else {
+                            bullet.speed = bullet.baseSpeed || bullet.speed;
+                        }
+                    }
+                }
+                
                 bullet.update();
 
                 // 경계 체크
@@ -1298,7 +1841,6 @@
 
                     // 유령 증강: 25% 확률로 공격 무시
                     if (target.hasGhost && Math.random() < 0.25) {
-                        // 총알이 관통하고 지나감 (총알 제거하지 않음)
                         // "무시" 텍스트 표시
                         target.damageNumbers.push({
                             x: target.x,
@@ -1310,7 +1852,10 @@
                             duration: 1000,
                             offsetY: 0
                         });
-                        continue; // 총알은 계속 진행, 데미지 적용 안 함
+                        // 총알 제거하고 데미지 적용 안 함
+                        character.bullets.splice(i, 1);
+                        i--; // 인덱스 조정
+                        continue; // 데미지 적용 안 함
                     }
 
                     // 크리티컬 계산 (25% 확률로 데미지 2배)
@@ -1356,6 +1901,28 @@
                     }
 
                     target.health -= finalDamage;
+                    
+                    // 피의 맛: 적에게 입힌 피해의 20%만큼 회복
+                    if (character.hasTasteOfBlood) {
+                        const healAmount = finalDamage * 0.2;
+                        const oldHealth = character.health;
+                        character.health = Math.min(character.health + healAmount, character.maxHealth);
+                        const actualHeal = character.health - oldHealth;
+                        if (actualHeal > 0) {
+                            // 회복 숫자 표시 (빨간색) - 소수점 1자리까지만
+                            character.damageNumbers.push({
+                                x: character.x,
+                                y: character.y,
+                                damage: Math.round(actualHeal * 10) / 10, // 소수점 1자리로 반올림
+                                isCritical: false,
+                                isHeal: true, // 회복 여부
+                                startTime: Date.now(),
+                                duration: 1000,
+                                offsetY: 0
+                            });
+                        }
+                    }
+                    
                     character.bullets.splice(i, 1);
 
                     // 데미지 숫자 표시 추가
@@ -1387,25 +1954,25 @@
                     }
 
                     // 깊은 상처 (피격 시 상대 이동속도 -25% (0.5초))
-                    // 정화 증강이 있으면 상태이상 무시
-                    if (character.hasDeepWound && !target.hasPurify) {
+                    if (character.hasDeepWound) {
                         target.slowEndTime = Date.now() + 500;
                     }
                     
-                    // 독 탄환 효과 (3초동안 1초마다 0.2데미지)
-                    // 정화 증강이 있으면 상태이상 무시
-                    if (bullet.hasPoison && !target.hasPurify) {
+                    // 독 탄환 효과 (1초간격으로 3번 0.2데미지)
+                    if (bullet.hasPoison) {
                         character.poisonEffects.push({
                             target: target,
                             startTime: Date.now(),
-                            duration: 3000, // 3초
+                            duration: 3000, // 3초 (1초간격으로 3번)
                             damagePerSecond: 0.2,
-                            lastDamageTime: Date.now()
+                            lastDamageTime: Date.now(),
+                            hitCount: 0, // 히트 횟수
+                            maxHits: 3 // 최대 히트 횟수
                         });
                     }
                     
-                    // 집중 사격: 피격시 25% 확률로 상대에게 취약 부여
-                    if (target.hasFocusedFire && Math.random() < 0.25) {
+                    // 집중 사격: 피격시 50% 확률로 상대에게 취약 부여
+                    if (target.hasFocusedFire && Math.random() < 0.5) {
                         character.isVulnerable = true;
                         character.vulnerabilityUsed = false;
                     }
@@ -1417,7 +1984,7 @@
                         if (target.hasRevive && !target.hasRevived && !target.isReviving) {
                             target.hasRevived = true; // 부활 사용 표시
                             target.isReviving = true;
-                            target.reviveTime = Date.now() + 2000;
+                            target.reviveTime = Date.now() + 1000;
                         } else {
                             endRound(character === player ? 'player' : 'enemy');
                         }
@@ -1431,6 +1998,7 @@
         // 라운드 종료
         function endRound(winner) {
             gameState.isPaused = true;
+
 
             // 라운드 승리 기록에 추가 (순서대로)
             gameState.roundWins.push(winner);
@@ -1497,6 +2065,9 @@
                     opponentSelectionDiv.innerHTML = `<p style="color: #e94560; margin: 0;">상대 선택: <strong style="color: #ffc107;">${selectedAugment.name}</strong></p>`;
                 }
                 
+                // 본 증강 목록에 추가 (적이 선택한 증강도)
+                markAugmentAsSeen(selectedAugment.id);
+                
                 // 플레이어가 승리한 경우: 상대 선택 완료 후 자동으로 다음 라운드로
                 if (gameState.showOpponentSelecting) {
                     gameState.showOpponentSelecting = false;
@@ -1514,9 +2085,16 @@
             const optionsDiv = document.getElementById('augmentOptions');
             optionsDiv.innerHTML = '';
 
-            // 랜덤 증강 3개 선택
-            const shuffled = [...augmentations].sort(() => Math.random() - 0.5);
+            // 랜덤 증강 3개 선택 (플레이어가 이미 선택한 증강 제외)
+            const selectedAugmentIds = character.augmentations.map(aug => aug.id);
+            const availableAugments = augmentations.filter(aug => !selectedAugmentIds.includes(aug.id));
+            const shuffled = [...availableAugments].sort(() => Math.random() - 0.5);
             const selectedAugments = shuffled.slice(0, 3);
+
+            // 선택 가능한 3개 증강 모두 도감에 저장
+            selectedAugments.forEach(aug => {
+                markAugmentAsSeen(aug.id);
+            });
 
             let timeLeft = 15;
             let isSelected = false;
@@ -1530,7 +2108,6 @@
                 aug.effect(character);
                 character.augmentations.push(aug);
                 gameState.augmentCountdown = 0;
-                
                 // 플레이어가 패배한 경우: 플레이어만 선택하므로 바로 다음 라운드로
                         modal.style.display = 'none';
                 // 확인 모달도 닫기
@@ -1612,6 +2189,18 @@
             gameState.round++;
             gameState.gameTime = 180;
             gameState.showOpponentSelecting = false;
+            
+            // 전투 경험: 진 라운드 수마다 최대체력 0.5, 데미지 0.1 증가
+            if (player.hasCombatExperience) {
+                player.combatExperienceRounds = gameState.playerWins; // 진 라운드 수
+                player.maxHealth = 5 + player.combatExperienceRounds * 0.5;
+                player.damage = 1 + player.combatExperienceRounds * 0.1;
+            }
+            if (enemy.hasCombatExperience) {
+                enemy.combatExperienceRounds = gameState.enemyWins; // 진 라운드 수
+                enemy.maxHealth = 5 + enemy.combatExperienceRounds * 0.5;
+                enemy.damage = 1 + enemy.combatExperienceRounds * 0.1;
+            }
 
             // 플레이어 상태 초기화
             player.x = canvas.width * 0.2;
@@ -1664,6 +2253,9 @@
             enemy.dodgeStartY = 0;
             enemy.dodgeTargetX = 0;
             enemy.dodgeTargetY = 0;
+            enemy.bulletDodgeTargetY = 0;
+            enemy.isDodgingBullet = false;
+            enemy.lastPlayerBulletCount = 0;
             enemy.dodgeTrail = [];
             enemy.lastDodgeTime = 0;
             enemy.isReviving = false;
@@ -1673,6 +2265,10 @@
             enemy.invincibleEndTime = 0;
             enemy.slowEndTime = 0;
             enemy.damageNumbers = [];
+            enemy.usePrediction = false;
+            enemy.lastPlayerX = 0;
+            enemy.lastPlayerY = 0;
+            enemy.playerVelocity = { x: 0, y: 0 };
             enemy.poisonEffects = [];
             enemy.hasRecoveryContractUsed = false; // 회복계약 초기화
             enemy.isVulnerable = false;
@@ -1707,16 +2303,32 @@
             const message = document.getElementById('gameOverMessage');
 
             if (winner === 'player') {
-                title.textContent = '승리!';
-                title.style.color = '#4a9eff';
-                message.textContent = `축하합니다! ${gameState.playerWins}승으로 승리하셨습니다!`;
+                title.textContent = '승리';
+                title.style.color = '#4a9eff'; // 파란색
+                message.textContent = '승리';
+                message.style.color = '#4a9eff'; // 파란색
             } else {
                 title.textContent = '패배';
-                title.style.color = '#e94560';
-                message.textContent = `아쉽네요... ${gameState.enemyWins}승으로 패배했습니다.`;
+                title.style.color = '#e94560'; // 빨간색
+                message.textContent = '패배';
+                message.style.color = '#e94560'; // 빨간색
             }
 
             modal.style.display = 'block';
+            
+            // 10초 후 메인화면으로 이동
+            setTimeout(() => {
+                gameState.isMenu = true;
+                gameState.isGameOver = false;
+                modal.style.display = 'none';
+                document.getElementById('mainMenu').style.display = 'flex';
+                // 게임 상태 초기화
+                gameState.round = 1;
+                gameState.playerWins = 0;
+                gameState.enemyWins = 0;
+                gameState.gameTime = 180;
+                gameState.roundWins = [];
+            }, 10000);
         }
 
         // 게임 재시작
@@ -1760,7 +2372,6 @@
             player.hasLastBullet = false;
             player.hasRecoveryContract = false;
             player.hasRecoveryContractUsed = false;
-            player.hasPurify = false;
             player.hasFocusedFire = false;
             player.hasShotgun = false;
             player.hasRagged = false;
@@ -1786,6 +2397,15 @@
             player.shieldCooldown = 0;
             player.hasRegeneration = false;
             player.lastRegenTime = 0;
+            player.hasEvasiveManeuver = false;
+            player.hasCombatExperience = false;
+            player.combatExperienceRounds = 0;
+            player.hasHallucination = false;
+            player.hasTasteOfBlood = false;
+            player.hasCannon = false;
+            player.hasTimeBarrier = false;
+            player.timeBarrierRadius = 150;
+            player.hasBouncyBullet = false;
             player.isVulnerable = false;
             player.vulnerabilityUsed = false;
             player.poisonEffects = [];
@@ -1835,8 +2455,16 @@
             enemy.hasLastBullet = false;
             enemy.hasRecoveryContract = false;
             enemy.hasRecoveryContractUsed = false;
-            enemy.hasPurify = false;
             enemy.hasFocusedFire = false;
+            enemy.hasEvasiveManeuver = false;
+            enemy.hasCombatExperience = false;
+            enemy.combatExperienceRounds = 0;
+            enemy.hasHallucination = false;
+            enemy.hasTasteOfBlood = false;
+            enemy.hasCannon = false;
+            enemy.hasTimeBarrier = false;
+            enemy.timeBarrierRadius = 150;
+            enemy.hasBouncyBullet = false;
             enemy.isVulnerable = false;
             enemy.vulnerabilityUsed = false;
             enemy.poisonEffects = [];
@@ -1847,6 +2475,9 @@
             enemy.dodgeStartY = 0;
             enemy.dodgeTargetX = 0;
             enemy.dodgeTargetY = 0;
+            enemy.bulletDodgeTargetY = 0;
+            enemy.isDodgingBullet = false;
+            enemy.lastPlayerBulletCount = 0;
             enemy.dodgeTrail = [];
             enemy.lastDodgeTime = 0;
             enemy.isReviving = false;
@@ -1856,6 +2487,10 @@
             enemy.invincibleEndTime = 0;
             enemy.slowEndTime = 0;
             enemy.damageNumbers = [];
+            enemy.usePrediction = false;
+            enemy.lastPlayerX = 0;
+            enemy.lastPlayerY = 0;
+            enemy.playerVelocity = { x: 0, y: 0 };
             enemy.damage = 1;
             enemy.reloadTime = 3000;
             enemy.reloadStartTime = 0;
@@ -2200,20 +2835,6 @@
                     ctx.closePath();
                     ctx.fill();
                     break;
-                case 'purify':
-                    // 정화: 원 + 십자가
-                    ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.4);
-                    ctx.lineTo(0, size * 0.4);
-                    ctx.moveTo(-size * 0.4, 0);
-                    ctx.lineTo(size * 0.4, 0);
-                    ctx.stroke();
-                    break;
                 case 'focusedFire':
                     // 집중 사격: 눈 모양
                     ctx.fillStyle = '#ffff00';
@@ -2407,7 +3028,7 @@
                     ctx.fillRect(-size * 0.35, -size * 0.05, size * 0.7, size * 0.1);
                     break;
                 case 'ragged':
-                    // 오합지졸: 깨진 총알
+                    // 다다익선: 깨진 총알
                     ctx.fillStyle = '#888888';
                     ctx.beginPath();
                     ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
@@ -2418,6 +3039,112 @@
                     ctx.moveTo(-size * 0.2, -size * 0.2);
                     ctx.lineTo(size * 0.2, size * 0.2);
                     ctx.stroke();
+                    break;
+                case 'evasiveManeuver':
+                    // 회피기동: 화살표 + 번개
+                    ctx.fillStyle = '#4a9eff';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.3);
+                    ctx.lineTo(-size * 0.2, size * 0.1);
+                    ctx.lineTo(0, 0);
+                    ctx.lineTo(size * 0.2, size * 0.1);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.1, -size * 0.1);
+                    ctx.lineTo(size * 0.1, size * 0.1);
+                    ctx.moveTo(size * 0.1, -size * 0.1);
+                    ctx.lineTo(-size * 0.1, size * 0.1);
+                    ctx.stroke();
+                    break;
+                case 'combatExperience':
+                    // 전투 경험: 별
+                    ctx.fillStyle = '#ffaa00';
+                    ctx.beginPath();
+                    for (let i = 0; i < 5; i++) {
+                        const angle = (i * 4 * Math.PI / 5) - Math.PI / 2;
+                        const r = i % 2 === 0 ? size * 0.3 : size * 0.15;
+                        const x = Math.cos(angle) * r;
+                        const y = Math.sin(angle) * r;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 'hallucination':
+                    // 환각: 물결 모양
+                    ctx.strokeStyle = '#ff00ff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    for (let i = -size * 0.4; i <= size * 0.4; i += 5) {
+                        const y = Math.sin(i * 0.2) * size * 0.2;
+                        if (i === -size * 0.4) ctx.moveTo(i, y);
+                        else ctx.lineTo(i, y);
+                    }
+                    ctx.stroke();
+                    break;
+                case 'tasteOfBlood':
+                    // 피의 맛: 빨간 하트
+                    ctx.fillStyle = '#ff0000';
+                    ctx.beginPath();
+                    ctx.moveTo(0, size * 0.1);
+                    ctx.bezierCurveTo(0, -size * 0.1, -size * 0.25, -size * 0.1, -size * 0.25, size * 0.1);
+                    ctx.bezierCurveTo(-size * 0.25, size * 0.3, 0, size * 0.5, 0, size * 0.5);
+                    ctx.bezierCurveTo(0, size * 0.5, size * 0.25, size * 0.3, size * 0.25, size * 0.1);
+                    ctx.bezierCurveTo(size * 0.25, -size * 0.1, 0, -size * 0.1, 0, size * 0.1);
+                    ctx.fill();
+                    break;
+                case 'cannon':
+                    // 대포: 큰 원
+                    ctx.fillStyle = '#8B4513';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#654321';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    break;
+                case 'timeBarrier':
+                    // 시간장막: 원 + 시계
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 2;
+                    ctx.globalAlpha = 0.5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
+                    // 시계 바늘
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(0, -size * 0.2);
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(size * 0.15, size * 0.1);
+                    ctx.stroke();
+                    break;
+                case 'bouncyBullet':
+                    // 통통탄: 튕기는 화살표
+                    ctx.fillStyle = '#ffaa00';
+                    ctx.beginPath();
+                    // 위쪽 화살표
+                    ctx.moveTo(0, -size * 0.3);
+                    ctx.lineTo(-size * 0.15, -size * 0.1);
+                    ctx.lineTo(0, 0);
+                    ctx.lineTo(size * 0.15, -size * 0.1);
+                    ctx.closePath();
+                    ctx.fill();
+                    // 아래쪽 화살표 (반대 방향)
+                    ctx.beginPath();
+                    ctx.moveTo(0, size * 0.3);
+                    ctx.lineTo(-size * 0.15, size * 0.1);
+                    ctx.lineTo(0, 0);
+                    ctx.lineTo(size * 0.15, size * 0.1);
+                    ctx.closePath();
+                    ctx.fill();
                     break;
                 default:
                     // 기본: 사각형
@@ -2610,6 +3337,74 @@
 
         // 그리기 함수
         // 게임 시작 함수들
+        // 본 증강 목록 관리 (localStorage 사용)
+        function getSeenAugments() {
+            const seen = localStorage.getItem('seenAugments');
+            return seen ? JSON.parse(seen) : [];
+        }
+
+        function markAugmentAsSeen(augmentId) {
+            const seen = getSeenAugments();
+            if (!seen.includes(augmentId)) {
+                seen.push(augmentId);
+                localStorage.setItem('seenAugments', JSON.stringify(seen));
+            }
+        }
+
+        // 도감 모달 열기
+        function openCollectionModal() {
+            const modal = document.getElementById('collectionModal');
+            const content = document.getElementById('collectionContent');
+            const seenAugments = getSeenAugments();
+            const canvas = document.getElementById('gameCanvas');
+            
+            content.innerHTML = '';
+            
+            augmentations.forEach(aug => {
+                const isSeen = seenAugments.includes(aug.id);
+                const item = document.createElement('div');
+                item.className = 'collection-item' + (isSeen ? '' : ' locked');
+                item.innerHTML = `
+                    <h4>${isSeen ? aug.name : '???'}</h4>
+                    <p>${isSeen ? aug.description : '??? (아직 발견하지 못했습니다)'}</p>
+                `;
+                content.appendChild(item);
+            });
+            
+            // 게임 캔버스 클릭 차단
+            if (canvas) {
+                canvas.style.pointerEvents = 'none';
+            }
+            
+            modal.style.display = 'block';
+        }
+
+        // 도감 모달 닫기
+        function closeCollectionModal() {
+            const modal = document.getElementById('collectionModal');
+            const canvas = document.getElementById('gameCanvas');
+            
+            modal.style.display = 'none';
+            
+            // 게임 캔버스 클릭 복구
+            if (canvas) {
+                canvas.style.pointerEvents = 'auto';
+            }
+        }
+
+        // 조작법 모달 열기
+        function openControlsModal() {
+            const modal = document.getElementById('controlsModal');
+            modal.style.display = 'block';
+        }
+
+        // 조작법 모달 닫기
+        function closeControlsModal() {
+            const modal = document.getElementById('controlsModal');
+            modal.style.display = 'none';
+        }
+
+
         function startSoloGame() {
             gameState.isMenu = false;
             document.getElementById('mainMenu').style.display = 'none';
@@ -2617,6 +3412,9 @@
         }
 
         function initGame() {
+            // 캔버스 크기 재확인
+            resizeCanvas();
+            
             // 게임 상태 초기화
             gameState.round = 1;
             gameState.playerWins = 0;
@@ -2655,7 +3453,6 @@
             player.hasLastBullet = false;
             player.hasRecoveryContract = false;
             player.hasRecoveryContractUsed = false;
-            player.hasPurify = false;
             player.hasFocusedFire = false;
             player.hasShotgun = false;
             player.hasRagged = false;
@@ -2681,6 +3478,15 @@
             player.shieldCooldown = 0;
             player.hasRegeneration = false;
             player.lastRegenTime = 0;
+            player.hasEvasiveManeuver = false;
+            player.hasCombatExperience = false;
+            player.combatExperienceRounds = 0;
+            player.hasHallucination = false;
+            player.hasTasteOfBlood = false;
+            player.hasCannon = false;
+            player.hasTimeBarrier = false;
+            player.timeBarrierRadius = 150;
+            player.hasBouncyBullet = false;
             player.isVulnerable = false;
             player.vulnerabilityUsed = false;
             player.poisonEffects = [];
@@ -2691,6 +3497,11 @@
             player.damageNumbers = [];
             player.damage = 1;
             player.speed = 3;
+            player.reloadTime = 3000;
+            player.isReloading = false;
+            player.reloadStartTime = 0;
+            player.shootCooldown = 1000;
+            player.lastShot = 0;
 
             // enemy 초기화
                 enemy.x = canvas.width * 0.8;
@@ -2718,7 +3529,6 @@
                 enemy.hasLastBullet = false;
                 enemy.hasRecoveryContract = false;
                 enemy.hasRecoveryContractUsed = false;
-                enemy.hasPurify = false;
                 enemy.hasFocusedFire = false;
             enemy.hasShotgun = false;
             enemy.hasRagged = false;
@@ -2744,7 +3554,16 @@
             enemy.shieldCooldown = 0;
             enemy.hasRegeneration = false;
             enemy.lastRegenTime = 0;
-                enemy.isVulnerable = false;
+            enemy.hasEvasiveManeuver = false;
+            enemy.hasCombatExperience = false;
+            enemy.combatExperienceRounds = 0;
+            enemy.hasHallucination = false;
+            enemy.hasTasteOfBlood = false;
+            enemy.hasCannon = false;
+            enemy.hasTimeBarrier = false;
+            enemy.timeBarrierRadius = 150;
+            enemy.hasBouncyBullet = false;
+            enemy.isVulnerable = false;
                 enemy.vulnerabilityUsed = false;
                 enemy.poisonEffects = [];
                 enemy.isDodging = false;
@@ -2752,9 +3571,17 @@
                 enemy.isInvincible = false;
                 enemy.slowEndTime = 0;
                 enemy.damageNumbers = [];
+                enemy.usePrediction = false;
+                enemy.lastPlayerX = 0;
+                enemy.lastPlayerY = 0;
+                enemy.playerVelocity = { x: 0, y: 0 };
                 enemy.damage = 1;
                 enemy.speed = 2.5;
-            enemy.reloadTime = 3000;
+                enemy.reloadTime = 3000;
+                enemy.isReloading = false;
+                enemy.reloadStartTime = 0;
+                enemy.shootCooldown = 1000;
+                enemy.lastShot = 0;
 
             // 첫 라운드 카운트다운 시작
             const initialCountdown = setInterval(() => {
@@ -2829,6 +3656,81 @@
                 }
             }
 
+            // 적 그리기
+            if (enemy.x > -500 && enemy.y > -500) {
+                ctx.save();
+                ctx.translate(enemy.x, enemy.y);
+                ctx.rotate(enemy.angle);
+                
+                // 기본 alpha 설정
+                ctx.globalAlpha = 1.0;
+                
+                // 무적 상태면 깜빡임 효과
+                if (enemy.isInvincible) {
+                    const blink = Math.floor(Date.now() / 100) % 2;
+                    if (blink) {
+                        ctx.globalAlpha = 0.5;
+                    }
+                }
+                
+                // 구르기 잔상 그리기
+                if (enemy.dodgeTrail && enemy.dodgeTrail.length > 0) {
+                    enemy.dodgeTrail.forEach((trail, index) => {
+                        ctx.save();
+                        ctx.globalAlpha = trail.alpha * (index / enemy.dodgeTrail.length);
+                        ctx.translate(trail.x - enemy.x, trail.y - enemy.y);
+                        ctx.beginPath();
+                        ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2);
+                        ctx.fillStyle = enemy.color;
+                        ctx.fill();
+                        ctx.restore();
+                    });
+                }
+                
+                ctx.beginPath();
+                ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2);
+                ctx.fillStyle = enemy.color;
+                ctx.fill();
+                
+                // 리볼버 그리기
+                ctx.fillStyle = '#333'; // 파스텔 그레이
+                ctx.fillRect(enemy.radius - 7.5, -4.5, 22.5, 9); // 1.5배 증가
+                
+                ctx.globalAlpha = 1.0; // 복원
+                ctx.restore();
+                
+                // 적 체력과 탄환수는 UI 영역에서 표시됨
+                
+                // 적 재장전 바 표시 (적 바로 오른쪽 위) - 적 위치에 흔들림 적용
+                if (enemy.isReloading) {
+                    drawReloadBar(enemy, enemy.x + 40 + shakeX, enemy.y - 40 + shakeY);
+                }
+            }
+
+            // 시간장막 그리기 (플레이어)
+            if (player.hasTimeBarrier) {
+                ctx.save();
+                ctx.globalAlpha = 0.2; // 투명도가 강한 초록색
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(player.x + shakeX, player.y + shakeY, player.timeBarrierRadius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+            
+            // 시간장막 그리기 (적)
+            if (enemy.hasTimeBarrier && enemy.x > -500 && enemy.y > -500) {
+                ctx.save();
+                ctx.globalAlpha = 0.2; // 투명도가 강한 초록색
+                ctx.strokeStyle = '#00ff00';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(enemy.x + shakeX, enemy.y + shakeY, enemy.timeBarrierRadius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+            }
+            
             // 플레이어 그리기
             drawDodgeTrail(player);
             ctx.save();
@@ -2836,6 +3738,7 @@
             ctx.rotate(player.angle);
             
             // 무적 상태일 때 반투명
+            ctx.globalAlpha = 1.0; // 기본값 설정
             if (player.isInvincible || player.isReviving) {
                 ctx.globalAlpha = 0.5;
             } else if (player.hasGhost) {
@@ -2862,36 +3765,6 @@
             // 리볼버 그리기
             ctx.fillStyle = '#333'; // 파스텔 그레이
             ctx.fillRect(player.radius - 7.5, -4.5, 22.5, 9); // 1.5배 증가
-            ctx.globalAlpha = 1.0;
-            ctx.restore();
-
-            // 적 그리기
-            drawDodgeTrail(enemy);
-            ctx.save();
-            ctx.translate(enemy.x, enemy.y);
-            ctx.rotate(enemy.angle);
-            
-            // 무적 상태일 때 반투명
-            if (enemy.isInvincible || enemy.isReviving) {
-                ctx.globalAlpha = 0.5;
-            } else if (enemy.hasGhost) {
-                // 유령 증강: 살짝 흐려지게
-                ctx.globalAlpha = 0.7;
-            }
-            
-            ctx.fillStyle = enemy.color;
-            ctx.beginPath();
-            ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2);
-            ctx.fill();
-            // 방어막: 진한 파란색 테두리
-            if (enemy.hasShield && enemy.shieldReady) {
-                ctx.strokeStyle = '#0066ff'; // 진한 파란색
-                ctx.lineWidth = 4;
-                ctx.stroke();
-            }
-            // 리볼버 그리기
-            ctx.fillStyle = '#333'; // 파스텔 그레이
-            ctx.fillRect(enemy.radius - 7.5, -4.5, 22.5, 9); // 1.5배 증가
             ctx.globalAlpha = 1.0;
             ctx.restore();
 
@@ -2954,24 +3827,22 @@
             }
             
             // 적 체력 표시 (오른쪽 위)
-            const fixedBarWidth = 150; // 고정된 바 길이
-            const enemyHealthX = canvas.width - fixedBarWidth - 20;
-            const enemyHealthY = 20;
-            drawHealthHearts(enemy, enemyHealthX, enemyHealthY, false);
-            // 적 탄환수 표시 (체력 아래, 오른쪽 정렬 - 원으로)
-            const enemyAmmoY = enemyHealthY + 40;
-            drawAmmoCount(enemy, enemyHealthX + fixedBarWidth, enemyAmmoY, 'right');
-            // 적 증강 아이콘 표시 (탄환 아래)
-            drawAugmentIcons(enemy, enemyHealthX + fixedBarWidth, enemyAmmoY + 50, 'right');
-            // 적 재장전 바 표시 (적 바로 오른쪽 위) - 흔들림 적용
-            if (enemy.isReloading) {
-                drawReloadBar(enemy, enemy.x + 40 + shakeX, enemy.y - 40 + shakeY);
+            {
+                const fixedBarWidth = 150; // 고정된 바 길이
+                const enemyHealthX = canvas.width - fixedBarWidth - 20;
+                const enemyHealthY = 20;
+                drawHealthHearts(enemy, enemyHealthX, enemyHealthY, false);
+                // 적 탄환수 표시 (체력 아래, 오른쪽 정렬 - 원으로)
+                const enemyAmmoY = enemyHealthY + 40;
+                drawAmmoCount(enemy, enemyHealthX + fixedBarWidth, enemyAmmoY, 'right');
+                // 적 증강 아이콘 표시 (탄환 아래)
+                drawAugmentIcons(enemy, enemyHealthX + fixedBarWidth, enemyAmmoY + 50, 'right');
             }
-            
             // 증강 툴팁 표시
             if (hoveredAugment) {
                 drawAugmentTooltip(hoveredAugment.aug, hoveredAugment.x, hoveredAugment.y);
             }
+            
         }
         
         // 증강 툴팁 그리기
@@ -3074,14 +3945,19 @@
                 const poison = character.poisonEffects[i];
                 const elapsed = now - poison.startTime;
                 
-                // 3초가 지나면 제거
-                if (elapsed >= poison.duration) {
+                // 2초가 지나거나 최대 히트 횟수에 도달하면 제거
+                if (elapsed >= poison.duration || (poison.hitCount >= poison.maxHits)) {
                     character.poisonEffects.splice(i, 1);
                     continue;
                 }
                 
-                // 1초마다 0.2 데미지 (정화 증강이 있으면 무시)
-                if (now - poison.lastDamageTime >= 1000 && !poison.target.hasPurify) {
+                // 1초마다 0.2 데미지 (최대 2번, 정화 증강이 있으면 무시)
+                // 기존 독 효과 호환성을 위해 hitCount가 없으면 초기화
+                if (!poison.hasOwnProperty('hitCount')) {
+                    poison.hitCount = 0;
+                    poison.maxHits = 3;
+                }
+                if (now - poison.lastDamageTime >= 1000 && (poison.hitCount || 0) < (poison.maxHits || 3)) {
                     // 유령 증강: 25% 확률로 독 데미지 무시
                     if (poison.target.hasGhost && Math.random() < 0.25) {
                         // "무시" 텍스트 표시
@@ -3107,6 +3983,7 @@
                     
                     poison.target.health -= poisonDamage;
                     poison.lastDamageTime = now;
+                    poison.hitCount = (poison.hitCount || 0) + 1; // 히트 횟수 증가
                     
                     // 독 데미지 숫자 표시 (어두운 초록색)
                     poison.target.damageNumbers.push({
@@ -3127,7 +4004,7 @@
                         if (poison.target.hasRevive && !poison.target.hasRevived && !poison.target.isReviving) {
                             poison.target.hasRevived = true;
                             poison.target.isReviving = true;
-                            poison.target.reviveTime = now + 2000;
+                            poison.target.reviveTime = now + 1000;
                         } else {
                             endRound(poison.target === player ? 'enemy' : 'player');
                         }
@@ -3168,8 +4045,10 @@
                 ctx.save();
                 ctx.globalAlpha = alpha;
                 
-                // 색상 결정: 방어막 무시면 진한 파란색, 유령 무시면 회색, 기절이면 노란색, 독 데미지면 어두운 초록색, 크리티컬이면 어두운 노란색, 아니면 하얀색
-                if (damageNum.isShield) {
+                // 색상 결정: 회복이면 빨간색, 방어막 무시면 진한 파란색, 유령 무시면 회색, 기절이면 노란색, 독 데미지면 어두운 초록색, 크리티컬이면 어두운 노란색, 아니면 하얀색
+                if (damageNum.isHeal) {
+                    ctx.fillStyle = '#ff0000'; // 빨간색
+                } else if (damageNum.isShield) {
                     ctx.fillStyle = '#0066ff'; // 진한 파란색
                 } else if (damageNum.isGhost) {
                     ctx.fillStyle = '#888888'; // 회색
