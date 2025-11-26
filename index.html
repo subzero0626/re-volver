@@ -1675,13 +1675,22 @@
                     // 비산탄: ±4도 범위에서 2도 간격으로 4개로 나눔 + 데미지 0.25배
                     const scatterAngles = [-4, -2, 0, 2];
                     
+                    // 도박 증강: 각 발사마다 랜덤 배율 적용
+                    let scatterGambleMultiplier = 1;
+                    let scatterBaseAngle = character.angle;
+                    if (character.hasGamble) {
+                        const randomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
+                        scatterBaseAngle = character.angle + randomAngle;
+                        scatterGambleMultiplier = 1 + Math.random(); // 1~2배
+                    }
+                    
                     if (character.hasShotgun) {
                         // 샷건 + 비산탄: 모든 탄약을 샷건으로 발사하되, 각 총알을 비산탄으로 분산
                         const currentAmmo = character.ammo;
                         for (let i = 0; i < currentAmmo; i++) {
                             // ±20도 범위 내 랜덤 각도
                             const randomAngle = (Math.random() - 0.5) * (Math.PI * 40 / 180); // -20도 ~ +20도
-                            const baseAngle = character.angle + randomAngle;
+                            const baseAngle = scatterBaseAngle + randomAngle;
                             
                             // 각 총알을 비산탄으로 분산
                             scatterAngles.forEach(angleDeg => {
@@ -1693,6 +1702,10 @@
                                     character,
                                     false
                                 );
+                                // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
+                                if (character.hasGamble) {
+                                    bullet.damage = Math.round(bullet.damage * scatterGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
+                                }
                                 bullet.damage = bullet.damage * 0.25; // 데미지 0.25배
                                 character.bullets.push(bullet);
                             });
@@ -1702,7 +1715,7 @@
                     } else {
                         // 비산탄만: 한 발씩 발사할 때 ±4도 범위에서 2도 간격으로 4개로 나눔
                         scatterAngles.forEach(angleDeg => {
-                            const angle = character.angle + (angleDeg * Math.PI / 180);
+                            const angle = scatterBaseAngle + (angleDeg * Math.PI / 180);
                             const bullet = new Bullet(
                                 character.x + Math.cos(character.angle) * character.radius,
                                 character.y + Math.sin(character.angle) * character.radius,
@@ -1710,6 +1723,10 @@
                                 character,
                                 false
                             );
+                            // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
+                            if (character.hasGamble) {
+                                bullet.damage = Math.round(bullet.damage * scatterGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
+                            }
                             bullet.damage = bullet.damage * 0.25; // 데미지 0.25배
                             character.bullets.push(bullet);
                         });
@@ -1718,10 +1735,20 @@
                     }
                 } else if (character.hasShotgun) {
                 // 샷건 증강: 모든 탄약을 ±20도 범위에서 한번에 발사
+                    // 도박 증강: 각 발사마다 랜덤 배율 적용
+                    let shotgunGambleMultiplier = 1;
+                    if (character.hasGamble) {
+                        shotgunGambleMultiplier = 1 + Math.random(); // 1~2배
+                    }
+                    
                     const currentAmmo = character.ammo;
                     for (let i = 0; i < currentAmmo; i++) {
                         // ±20도 범위 내 랜덤 각도
-                        const randomAngle = (Math.random() - 0.5) * (Math.PI * 40 / 180); // -20도 ~ +20도
+                        let randomAngle = (Math.random() - 0.5) * (Math.PI * 40 / 180); // -20도 ~ +20도
+                        // 도박 증강: 각도에도 ±10도 추가
+                        if (character.hasGamble) {
+                            randomAngle += (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도 추가
+                        }
                 const bullet = new Bullet(
                     character.x + Math.cos(character.angle) * character.radius,
                     character.y + Math.sin(character.angle) * character.radius,
@@ -1729,6 +1756,10 @@
                     character,
                     false
                 );
+                        // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
+                        if (character.hasGamble) {
+                            bullet.damage = Math.round(bullet.damage * shotgunGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
+                        }
                         character.bullets.push(bullet);
                     }
                     character.ammo = 0; // 모든 탄약 소모
@@ -1739,11 +1770,11 @@
                     let bulletDamage = character.damage || 1;
                     
                     // 도박 증강: ±10도 랜덤 각도, 데미지 1~2배 랜덤
+                    let gambleMultiplier = 1;
                     if (character.hasGamble) {
                         const randomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
                         bulletAngle = character.angle + randomAngle;
-                        bulletDamage = bulletDamage * (1 + Math.random()); // 1~2배
-                        bulletDamage = Math.round(bulletDamage * 10) / 10; // 소수점 1자리까지만 반올림
+                        gambleMultiplier = 1 + Math.random(); // 1~2배
                     }
                     
                     // 비산탄이 있으면 일반 발사도 비산탄으로 분산
@@ -1758,9 +1789,9 @@
                                 character,
                                 false
                             );
-                            // 도박 증강: 데미지 랜덤 적용
+                            // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
                             if (character.hasGamble) {
-                                bullet.damage = bulletDamage;
+                                bullet.damage = Math.round(bullet.damage * gambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
                             }
                             bullet.damage = bullet.damage * 0.25; // 데미지 0.25배
                             character.bullets.push(bullet);
@@ -1773,9 +1804,9 @@
                             character,
                             false
                         );
-                        // 도박 증강: 데미지 랜덤 적용
+                        // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
                         if (character.hasGamble) {
-                            bullet.damage = bulletDamage;
+                            bullet.damage = Math.round(bullet.damage * gambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
                         }
                         character.bullets.push(bullet);
                     }
@@ -1787,7 +1818,15 @@
                 if (character.hasDoubleShot && Math.random() < (0.25 * doubleShotCount)) {
                     // ±15도 사이의 랜덤 각도
                     const randomAngle = (Math.random() - 0.5) * (Math.PI * 30 / 180); // -15도 ~ +15도
-                    const doubleBulletAngle = character.angle + randomAngle;
+                    let doubleBulletAngle = character.angle + randomAngle;
+                    
+                    // 더블샷에도 도박 증강 적용 (각도만, 데미지는 총알 생성 후 적용)
+                    let doubleGambleMultiplier = 1;
+                    if (character.hasGamble) {
+                        const doubleRandomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
+                        doubleBulletAngle = character.angle + doubleRandomAngle;
+                        doubleGambleMultiplier = 1 + Math.random(); // 1~2배
+                    }
                     
                     // 더블샷에도 비산탄 적용
                     if (character.hasScatter) {
@@ -1801,6 +1840,10 @@
                                 character,
                                 true // 탄약 소모 없음
                             );
+                            // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
+                            if (character.hasGamble) {
+                                doubleBullet.damage = Math.round(doubleBullet.damage * doubleGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
+                            }
                             doubleBullet.damage = doubleBullet.damage * 0.25; // 데미지 0.25배
                             character.bullets.push(doubleBullet);
                         });
@@ -1812,6 +1855,10 @@
                             character,
                             true // 탄약 소모 없음
                         );
+                        // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
+                        if (character.hasGamble) {
+                            doubleBullet.damage = Math.round(doubleBullet.damage * doubleGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
+                        }
                         character.bullets.push(doubleBullet);
                     }
                     }
@@ -2288,17 +2335,17 @@
             const currentPlayerBulletCount = player.bullets.length;
             if (currentPlayerBulletCount > enemy.lastPlayerBulletCount) {
                 // 플레이어가 총을 쐈음
-                const dodgeProbability = 0.8; // 80% 확률
+                const dodgeProbability = 0.85; // 85% 확률
                 if (Math.random() < dodgeProbability) {
-                    // 80% 확률로 회피
+                    // 85% 확률로 회피
                     enemy.isDodgingBullet = true;
                     // 총알 방향에서 +90도 또는 -90도로 이동
                     const bulletAngle = player.angle; // 플레이어가 쏜 총알의 방향
                     const dodgeDirection = Math.random() < 0.5 ? 1 : -1; // 1 = +90도, -1 = -90도
                     const dodgeAngle = bulletAngle + (dodgeDirection * Math.PI / 2); // ±90도
-                    const dodgeDistance = 50;
+                    const dodgeDistance = 30 + Math.random() * 30; // 30px~60px 랜덤
                     
-                    // ±90도 방향으로 50px 이동한 목표 위치 계산
+                    // ±90도 방향으로 랜덤 거리만큼 이동한 목표 위치 계산
                     const targetX = enemy.x + Math.cos(dodgeAngle) * dodgeDistance;
                     const targetY = enemy.y + Math.sin(dodgeAngle) * dodgeDistance;
                     
@@ -2394,6 +2441,30 @@
                 enemy.aiTimer = 0;
             }
 
+            // 벽에 너무 붙으면 맵 중앙으로 이동 (회피 중이 아닐 때만)
+            if (!enemy.isDodgingBullet) {
+                const mapWidth = gameState.mapBounds.maxX - gameState.mapBounds.minX;
+                const mapHeight = gameState.mapBounds.maxY - gameState.mapBounds.minY;
+                const wallThreshold = Math.min(mapWidth, mapHeight) * 0.05; // 맵 크기의 5% 이내
+                
+                const distToLeftWall = enemy.x - (gameState.mapBounds.minX + enemy.radius);
+                const distToRightWall = (gameState.mapBounds.maxX - enemy.radius) - enemy.x;
+                const distToTopWall = enemy.y - (gameState.mapBounds.minY + enemy.radius);
+                const distToBottomWall = (gameState.mapBounds.maxY - enemy.radius) - enemy.y;
+                
+                // 벽에 너무 붙었는지 확인
+                if (distToLeftWall < wallThreshold || distToRightWall < wallThreshold ||
+                    distToTopWall < wallThreshold || distToBottomWall < wallThreshold) {
+                    // 맵 중앙으로 이동
+                    const centerX = (gameState.mapBounds.minX + gameState.mapBounds.maxX) / 2;
+                    const centerY = (gameState.mapBounds.minY + gameState.mapBounds.maxY) / 2;
+                    const dxToCenter = centerX - enemy.x;
+                    const dyToCenter = centerY - enemy.y;
+                    enemy.aiDirection = Math.atan2(dyToCenter, dxToCenter);
+                    enemy.aiTimer = 0;
+                }
+            }
+            
             // 경계에 닿으면 방향 변경 (맵 경계 사용)
             if (enemy.x < gameState.mapBounds.minX + enemy.radius || enemy.x > gameState.mapBounds.maxX - enemy.radius ||
                 enemy.y < gameState.mapBounds.minY + enemy.radius || enemy.y > gameState.mapBounds.maxY - enemy.radius) {
@@ -5971,11 +6042,20 @@
 
                 // 게틀링 발사 처리
                 if (player.hasGatling && player.gatlingBullets > 0 && now >= player.gatlingNextShot) {
+                    // 도박 증강: 각 발사마다 랜덤 배율 적용
+                    let gatlingGambleMultiplier = 1;
+                    let gatlingBaseAngle = player.angle;
+                    if (player.hasGamble) {
+                        const randomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
+                        gatlingBaseAngle = player.angle + randomAngle;
+                        gatlingGambleMultiplier = 1 + Math.random(); // 1~2배
+                    }
+                    
                     if (player.hasScatter) {
                         // 게틀링 + 비산탄: 각 발사를 비산탄으로 분산
                         const scatterAngles = [-4, -2, 0, 2];
                         scatterAngles.forEach(angleDeg => {
-                            const angle = player.angle + (angleDeg * Math.PI / 180);
+                            const angle = gatlingBaseAngle + (angleDeg * Math.PI / 180);
                             const bullet = new Bullet(
                                 player.x + Math.cos(player.angle) * player.radius,
                                 player.y + Math.sin(player.angle) * player.radius,
@@ -5983,6 +6063,10 @@
                                 player,
                                 false
                             );
+                            // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
+                            if (player.hasGamble) {
+                                bullet.damage = Math.round(bullet.damage * gatlingGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
+                            }
                             bullet.damage = bullet.damage * 0.25; // 데미지 0.25배
                             player.bullets.push(bullet);
                         });
@@ -5990,10 +6074,14 @@
                         const bullet = new Bullet(
                             player.x + Math.cos(player.angle) * player.radius,
                             player.y + Math.sin(player.angle) * player.radius,
-                            player.angle,
+                            gatlingBaseAngle,
                             player,
                             false
                         );
+                        // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
+                        if (player.hasGamble) {
+                            bullet.damage = Math.round(bullet.damage * gatlingGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
+                        }
                         player.bullets.push(bullet);
                     }
                     player.gatlingBullets--;
@@ -6005,11 +6093,20 @@
                     }
                 }
                 if (enemy.hasGatling && enemy.gatlingBullets > 0 && now >= enemy.gatlingNextShot) {
+                    // 도박 증강: 각 발사마다 랜덤 배율 적용
+                    let gatlingGambleMultiplier = 1;
+                    let gatlingBaseAngle = enemy.angle;
+                    if (enemy.hasGamble) {
+                        const randomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
+                        gatlingBaseAngle = enemy.angle + randomAngle;
+                        gatlingGambleMultiplier = 1 + Math.random(); // 1~2배
+                    }
+                    
                     if (enemy.hasScatter) {
                         // 게틀링 + 비산탄: 각 발사를 비산탄으로 분산
                         const scatterAngles = [-4, -2, 0, 2];
                         scatterAngles.forEach(angleDeg => {
-                            const angle = enemy.angle + (angleDeg * Math.PI / 180);
+                            const angle = gatlingBaseAngle + (angleDeg * Math.PI / 180);
                             const bullet = new Bullet(
                                 enemy.x + Math.cos(enemy.angle) * enemy.radius,
                                 enemy.y + Math.sin(enemy.angle) * enemy.radius,
@@ -6017,6 +6114,10 @@
                                 enemy,
                                 false
                             );
+                            // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
+                            if (enemy.hasGamble) {
+                                bullet.damage = Math.round(bullet.damage * gatlingGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
+                            }
                             bullet.damage = bullet.damage * 0.25; // 데미지 0.25배
                             enemy.bullets.push(bullet);
                         });
@@ -6024,10 +6125,14 @@
                         const bullet = new Bullet(
                             enemy.x + Math.cos(enemy.angle) * enemy.radius,
                             enemy.y + Math.sin(enemy.angle) * enemy.radius,
-                            enemy.angle,
+                            gatlingBaseAngle,
                             enemy,
                             false
                         );
+                        // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
+                        if (enemy.hasGamble) {
+                            bullet.damage = Math.round(bullet.damage * gatlingGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
+                        }
                         enemy.bullets.push(bullet);
                     }
                     enemy.gatlingBullets--;
