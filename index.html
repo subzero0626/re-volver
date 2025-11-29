@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>리볼버 듀얼</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -139,6 +140,30 @@
             font-size: 32px;
             margin-bottom: 20px;
             text-align: center;
+        }
+
+        #roomModal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 15, 30, 1);
+            border: 3px solid #4a9eff;
+            border-radius: 15px;
+            padding: 40px;
+            padding-bottom: 80px;
+            z-index: 3002;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            pointer-events: auto;
+        }
+
+        #roomModal h2 {
+            color: #4a9eff;
+            font-size: 32px;
+            margin-bottom: 30px;
         }
 
         #controlsModal {
@@ -370,16 +395,42 @@
 
         #multiPlayText {
             font-size: 42px;
-            color: #888;
-            cursor: not-allowed;
+            color: #fff;
+            cursor: pointer;
             margin-left: 12px;
             display: block;
             margin-top: 15px;
-            opacity: 0.6;
-            text-shadow: 0 0 10px rgba(255, 255, 255, 0.3),
-                        0 0 20px rgba(255, 255, 255, 0.2),
-                        0 0 30px rgba(255, 255, 255, 0.1);
-            transition: margin-top 0.3s ease;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5),
+                        0 0 20px rgba(255, 255, 255, 0.4),
+                        0 0 30px rgba(255, 255, 255, 0.3),
+                        0 0 40px rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        #multiPlayText:hover {
+            color: #4a9eff;
+            text-shadow: 0 0 10px rgba(74, 158, 255, 0.5),
+                        0 0 20px rgba(74, 158, 255, 0.5),
+                        0 0 40px rgba(74, 158, 255, 0.5),
+                        0 0 60px rgba(74, 158, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        #multiModeSelection {
+            max-height: 0;
+            opacity: 0;
+            overflow: visible;
+            margin-top: 0;
+            margin-left: 12px;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+            pointer-events: none;
+        }
+
+        #multiModeSelection.expanded {
+            max-height: 200px;
+            opacity: 1;
+            margin-top: 10px;
+            pointer-events: auto;
         }
 
         #settingsText {
@@ -473,12 +524,14 @@
             margin-top: 0;
             margin-left: 12px;
             transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+            pointer-events: none;
         }
 
         #modeSelection.expanded {
             max-height: 200px;
             opacity: 1;
             margin-top: 10px;
+            pointer-events: auto;
         }
 
         .mode-option {
@@ -509,6 +562,11 @@
         }
 
         #multiPlayText.moved-down {
+            margin-top: 20px;
+            transition: margin-top 0.3s ease;
+        }
+
+        #collectionText.moved-down {
             margin-top: 20px;
             transition: margin-top 0.3s ease;
         }
@@ -605,6 +663,114 @@
             <button onclick="closeCollectionModal()" style="margin-top: 20px;">닫기</button>
         </div>
 
+        <div id="roomModal">
+            <h2 id="roomModalTitle">방 생성</h2>
+            
+            <!-- 방 코드 표시 (호스트용, 연결 전) -->
+            <div id="roomCodeSection" style="display: none;">
+                <p style="margin-bottom: 10px;">방 코드:</p>
+                <div id="roomCode" style="font-size: 48px; color: #ffc107; text-shadow: 0 0 20px rgba(255, 193, 7, 0.5); letter-spacing: 10px; margin: 20px 0;"></div>
+                <p style="color: #aaa; font-size: 14px;">상대방에게 이 코드를 알려주세요</p>
+                <p id="waitingMessage" style="color: #4a9eff; margin-top: 20px;">상대방을 기다리는 중...</p>
+            </div>
+            
+            <!-- 방 코드 입력 (게스트용, 연결 전) -->
+            <div id="roomJoinInput" style="display: none;">
+                <p style="margin-bottom: 10px;">방 코드 입력:</p>
+                <input type="text" id="joinCodeInput" maxlength="5" placeholder="12345" style="
+                    font-size: 36px;
+                    text-align: center;
+                    letter-spacing: 8px;
+                    width: 200px;
+                    padding: 15px;
+                    border: 2px solid #4a9eff;
+                    border-radius: 10px;
+                    background: rgba(0, 0, 0, 0.3);
+                    color: #fff;
+                    outline: none;
+                ">
+                <p id="joinErrorMessage" style="color: #e94560; margin-top: 10px; display: none;">방을 찾을 수 없습니다</p>
+                <button id="joinRoomBtn" onclick="joinRoom()" style="margin-top: 20px; background: #4a9eff;">입장</button>
+            </div>
+            
+            <!-- 팀 선택 UI (연결 후) -->
+            <div id="teamSelectUI" style="display: none;">
+                <p style="margin-bottom: 20px; color: #aaa;">팀을 선택하세요</p>
+                <div style="display: flex; justify-content: center; gap: 30px; margin: 20px 0;">
+                    <!-- 파란팀 -->
+                    <div id="blueTeamBox" onclick="selectTeam('blue')" style="
+                        width: 180px;
+                        height: 120px;
+                        background: rgba(74, 158, 255, 0.1);
+                        border: 2px solid rgba(74, 158, 255, 0.4);
+                        border-radius: 15px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: flex-start;
+                        padding-top: 15px;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                    ">
+                        <p style="color: #4a9eff; font-size: 18px; margin-bottom: 8px;">파란팀</p>
+                        <p id="blueTeamPlayer" style="color: #fff; font-size: 16px; font-weight: bold;"></p>
+                    </div>
+                    <!-- 빨간팀 -->
+                    <div id="redTeamBox" onclick="selectTeam('red')" style="
+                        width: 180px;
+                        height: 120px;
+                        background: rgba(233, 69, 96, 0.1);
+                        border: 2px solid rgba(233, 69, 96, 0.4);
+                        border-radius: 15px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: flex-start;
+                        padding-top: 15px;
+                        cursor: pointer;
+                        transition: all 0.3s;
+                    ">
+                        <p style="color: #e94560; font-size: 18px; margin-bottom: 8px;">빨간팀</p>
+                        <p id="redTeamPlayer" style="color: #fff; font-size: 16px; font-weight: bold;"></p>
+                    </div>
+                </div>
+                <p id="teamSelectStatus" style="color: #aaa; margin-top: 10px;"></p>
+                <p id="guestWaitingMessage" style="display: none; color: #4a9eff; margin-top: 15px;">호스트가 게임을 시작하면 시작됩니다...</p>
+            </div>
+            
+            <!-- 하단 버튼 영역 -->
+            <div style="position: absolute; bottom: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between;">
+                <button onclick="closeRoomModal()" style="background: #e94560; padding: 12px 30px;">나가기</button>
+                <button id="startGameBtn" onclick="sendStartGame()" style="display: none; background: #00cc66; font-size: 18px; padding: 12px 30px;">게임 시작</button>
+            </div>
+        </div>
+        
+        <div id="disconnectModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 15, 30, 1); border: 3px solid #e94560; border-radius: 15px; padding: 40px; z-index: 4000; text-align: center;">
+            <h2 style="color: #e94560; margin-bottom: 20px;">연결 끊김</h2>
+            <p style="color: #fff; margin-bottom: 30px;">상대방과의 연결이 끊어졌습니다.</p>
+            <button onclick="confirmDisconnect()" style="background: #4a9eff; padding: 15px 40px;">확인</button>
+        </div>
+        
+        <div id="nicknameModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 15, 30, 1); border: 3px solid #ffc107; border-radius: 15px; padding: 50px; z-index: 5000; text-align: center; min-width: 400px;">
+            <h2 style="color: #ffc107; margin-bottom: 15px; font-size: 28px;">리볼버 듀얼에 오신걸 환영합니다</h2>
+            <p style="color: #fff; margin-bottom: 30px; font-size: 18px;">플레이어님의 닉네임을 지어주세요</p>
+            <input type="text" id="nicknameInput" maxlength="12" placeholder="닉네임 입력" style="
+                font-size: 24px;
+                text-align: center;
+                width: 280px;
+                padding: 15px;
+                border: 2px solid #ffc107;
+                border-radius: 10px;
+                background: rgba(0, 0, 0, 0.3);
+                color: #fff;
+                outline: none;
+                margin-bottom: 20px;
+            ">
+            <br>
+            <button onclick="saveNickname()" style="background: #ffc107; color: #000; padding: 15px 50px; font-size: 18px; font-weight: bold;">확인</button>
+        </div>
+        
+
         <div id="controlsModal">
             <h2>조작법</h2>
             <div class="control-item">
@@ -623,15 +789,22 @@
         </div>
 
         <div id="mainMenu">
+            <div id="nicknameDisplay" style="display: none; position: absolute; top: 25px; right: 30px; color: #fff; font-size: 24px; opacity: 0.7;">
+                <span id="playerNickname" style="text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);"></span>
+            </div>
             <h1>리볼버 듀얼</h1>
             <span id="soloPlayText" onclick="showModeSelection()">솔로 플레이</span>
             <div id="modeSelection">
                 <span class="mode-option" onclick="startSoloGame('classic')">- 클래식 모드</span>
                 <span class="mode-option" onclick="startSoloGame('random')">- 랜덤 모드</span>
             </div>
-            <span id="multiPlayText"><span class="lock-icon">🔒</span>멀티 플레이</span>
+            <span id="multiPlayText" onclick="showMultiModeSelection()">멀티 플레이</span>
+            <div id="multiModeSelection">
+                <span class="mode-option" onclick="createRoom()">- 방 생성</span>
+                <span class="mode-option" onclick="showJoinRoom()">- 방 입장</span>
+            </div>
             <span class="menu-text" id="collectionText" onclick="openCollectionModal()">도감</span>
-            <span id="settingsText"><span class="lock-icon">🔒</span>설정</span>
+            <span id="settingsText"><span class="lock-icon">🔒</span>상점</span>
             <span class="menu-text" id="controlsText" onclick="openControlsModal()">조작법</span>
         </div>
 
@@ -658,13 +831,25 @@
         document.addEventListener('click', (e) => {
             const mainMenu = document.getElementById('mainMenu');
             const modeSelection = document.getElementById('modeSelection');
+            const multiModeSelection = document.getElementById('multiModeSelection');
             const soloPlayText = document.getElementById('soloPlayText');
+            const multiPlayText = document.getElementById('multiPlayText');
             
-            // 메인 메뉴가 표시되어 있고, 모드 선택이 펼쳐져 있을 때
-            if (mainMenu && mainMenu.style.display === 'flex' && modeSelection && modeSelection.classList.contains('expanded')) {
-                // 클릭한 요소가 모드 선택 영역이나 솔로 플레이 텍스트가 아닐 때
-                if (!modeSelection.contains(e.target) && !soloPlayText.contains(e.target)) {
-                    collapseModeSelection();
+            // 메인 메뉴가 표시되어 있을 때
+            if (mainMenu && mainMenu.style.display === 'flex') {
+                // 솔로플레이 모드 선택이 펼쳐져 있을 때
+                if (modeSelection && modeSelection.classList.contains('expanded')) {
+                    // 클릭한 요소가 모드 선택 영역이나 솔로 플레이 텍스트가 아닐 때
+                    if (!modeSelection.contains(e.target) && !soloPlayText.contains(e.target)) {
+                        collapseModeSelection();
+                    }
+                }
+                // 멀티플레이 모드 선택이 펼쳐져 있을 때
+                if (multiModeSelection && multiModeSelection.classList.contains('expanded')) {
+                    // 클릭한 요소가 멀티 모드 선택 영역이나 멀티 플레이 텍스트가 아닐 때
+                    if (!multiModeSelection.contains(e.target) && !multiPlayText.contains(e.target)) {
+                        collapseMultiModeSelection();
+                    }
                 }
             }
         });
@@ -698,7 +883,11 @@
                 minY: 0,
                 maxX: 0, // initGame에서 설정
                 maxY: 0  // initGame에서 설정
-            }
+            },
+            // 멀티플레이 상태
+            isMultiplayer: false,
+            multiplayerReady: false, // 양쪽 모두 준비됨
+            lastSyncTime: 0 // 마지막 동기화 시간
         };
 
         // 튜토리얼 상태
@@ -1667,6 +1856,7 @@
                     character.ammo = 0; // 모든 탄약 소모
                     character.gatlingNextShot = now; // 첫 발사는 즉시
                     character.lastShot = now; // 쿨타임 적용
+                    character.gatlingAngle = character.angle; // 발사 시작 시 방향 저장
                     return; // 실제 발사는 게임 루프에서 처리
                 }
                 
@@ -1872,6 +2062,13 @@
                 // 자동 재장전
                 if (character.ammo === 0 && !character.isReloading) {
                     reload(character);
+                }
+                
+                // 멀티플레이어: 플레이어가 쏜 총알 정보 전송
+                if (gameState.isMultiplayer && character === player && character.bullets.length > 0) {
+                    // 방금 추가된 총알들만 전송 (마지막에 추가된 총알)
+                    const newBullets = character.bullets.slice(-10); // 최대 10개 (샷건/비산탄 대비)
+                    sendShootData(newBullets);
                 }
             }
         }
@@ -2972,8 +3169,20 @@
 
         // 라운드 종료
         function endRound(winner) {
+            // 멀티플레이어: 게스트는 호스트로부터 결과를 받으므로 여기서 처리하지 않음
+            if (gameState.isMultiplayer && !isHost) {
+                return; // 게스트는 handleRoundEndFromHost에서 처리
+            }
+            
             gameState.isPaused = true;
 
+            // 멀티플레이어: 호스트가 결과 전송
+            if (gameState.isMultiplayer && isHost) {
+                sendMultiplayerData({
+                    type: 'roundEnd',
+                    winner: winner === 'player' ? 'host' : 'guest'
+                });
+            }
 
             // 라운드 승리 기록에 추가 (순서대로)
             gameState.roundWins.push(winner);
@@ -2991,11 +3200,25 @@
                 return;
             }
 
-            // 패배자가 증강 선택, 승리자는 확인만
+            // 멀티플레이어 모드 (호스트)
+            if (gameState.isMultiplayer) {
+                if (winner === 'player') {
+                    // 내가 승리: 상대가 증강 선택 중 - 15초 카운트다운만 표시
+                    gameState.showOpponentSelecting = true;
+                    gameState.augmentCountdown = 15;
+                    startOpponentWaitCountdown();
+                } else {
+                    // 내가 패배: 증강 선택
+                    showAugmentModal(player);
+                }
+                return;
+            }
+
+            // 솔로 모드: 패배자가 증강 선택, 승리자는 확인만
             if (winner === 'player') {
                 // 플레이어 승리: AI가 선택
-                    gameState.showOpponentSelecting = true;
-            selectAugmentForEnemy();
+                gameState.showOpponentSelecting = true;
+                selectAugmentForEnemy();
             } else {
                 // enemy 승리: 플레이어는 선택
                 showAugmentModal(player);
@@ -3016,26 +3239,35 @@
                 opponentSelectionDiv.innerHTML = '<p style="color: #e94560; margin: 0;">상대가 선택 중...</p>';
             }
             
+            // 2X모드 체크 - AI도 2개 선택
+            const isDoubleAugmentMode = gameState.selectedRandomMode && gameState.selectedRandomMode.id === 'doubleAugment';
+            const selectCount = isDoubleAugmentMode ? 2 : 1;
+            
             // 3초 대기 후 선택
             setTimeout(() => {
                 // AI는 구르기, 거점확보, 시간정지 증강을 뽑지 않음
                 const availableAugments = augmentations.filter(aug => aug.id !== 'dodge' && aug.id !== 'fortify' && aug.id !== 'timeStop');
                 const shuffled = [...availableAugments].sort(() => Math.random() - 0.5);
-                const selectedAugment = shuffled[0]; // 랜덤으로 하나 선택
-                selectedAugment.effect(enemy);
-                enemy.augmentations.push(selectedAugment);
-                incrementAugmentSelectCount(selectedAugment.id); // 선택 횟수 증가
+                
+                // selectCount만큼 증강 선택
+                const selectedAugments = [];
+                for (let i = 0; i < selectCount && i < shuffled.length; i++) {
+                    const selectedAugment = shuffled[i];
+                    selectedAugment.effect(enemy);
+                    enemy.augmentations.push(selectedAugment);
+                    incrementAugmentSelectCount(selectedAugment.id); // 선택 횟수 증가
+                    markAugmentAsSeen(selectedAugment.id); // 본 증강 목록에 추가
+                    selectedAugments.push(selectedAugment);
+                }
                 
                 // 선택한 증강 표시
+                const selectedNames = selectedAugments.map(aug => aug.name).join(', ');
                 if (enemySelectionDiv) {
-                enemySelectionDiv.innerHTML = `<p style="color: #e94560; margin: 0;">상대 선택: <strong style="color: #ffc107;">${selectedAugment.name}</strong></p>`;
+                    enemySelectionDiv.innerHTML = `<p style="color: #e94560; margin: 0;">상대 선택: <strong style="color: #ffc107;">${selectedNames}</strong></p>`;
                 }
                 if (opponentSelectionDiv) {
-                    opponentSelectionDiv.innerHTML = `<p style="color: #e94560; margin: 0;">상대 선택: <strong style="color: #ffc107;">${selectedAugment.name}</strong></p>`;
+                    opponentSelectionDiv.innerHTML = `<p style="color: #e94560; margin: 0;">상대 선택: <strong style="color: #ffc107;">${selectedNames}</strong></p>`;
                 }
-                
-                // 본 증강 목록에 추가 (적이 선택한 증강도)
-                markAugmentAsSeen(selectedAugment.id);
                 
                 // 플레이어가 승리한 경우: 상대 선택 완료 후 자동으로 다음 라운드로
                 if (gameState.showOpponentSelecting) {
@@ -3086,6 +3318,14 @@
                 aug.effect(character);
                 character.augmentations.push(aug);
                 incrementAugmentSelectCount(aug.id); // 선택 횟수 증가
+                
+                // 멀티플레이어: 증강 선택 정보 전송
+                if (gameState.isMultiplayer) {
+                    sendMultiplayerData({
+                        type: 'augmentSelected',
+                        augment: { id: aug.id, name: aug.name }
+                    });
+                }
                 
                 if (isDoubleAugmentMode) {
                     gameState.doubleAugmentSelectedCount = (gameState.doubleAugmentSelectedCount || 0) + 1;
@@ -3198,6 +3438,11 @@
 
         // 다음 라운드
         function nextRound() {
+            // 멀티플레이어: 호스트가 다음 라운드 시작 알림
+            if (gameState.isMultiplayer && isHost) {
+                sendMultiplayerData({ type: 'nextRound' });
+            }
+            
             resizeCanvas();
             gameState.round++;
             gameState.gameTime = 180;
@@ -3221,9 +3466,20 @@
                 enemy.damage = 1 + enemy.combatExperienceRounds * (0.1 * combatExperienceCount);
             }
 
-            // 플레이어 상태 초기화
-            player.x = gameState.mapBounds.minX + (gameState.mapBounds.maxX - gameState.mapBounds.minX) * 0.2;
-            player.y = gameState.mapBounds.minY + (gameState.mapBounds.maxY - gameState.mapBounds.minY) * 0.5;
+            // 플레이어 상태 초기화 - 멀티플레이어일 때 팀에 따른 위치 설정
+            const leftX = gameState.mapBounds.minX + (gameState.mapBounds.maxX - gameState.mapBounds.minX) * 0.2;
+            const rightX = gameState.mapBounds.minX + (gameState.mapBounds.maxX - gameState.mapBounds.minX) * 0.8;
+            const centerY = gameState.mapBounds.minY + (gameState.mapBounds.maxY - gameState.mapBounds.minY) * 0.5;
+            
+            if (gameState.isMultiplayer && myTeam) {
+                // 멀티플레이어: 파란팀은 왼쪽, 빨간팀은 오른쪽
+                player.x = myTeam === 'blue' ? leftX : rightX;
+                enemy.x = myTeam === 'blue' ? rightX : leftX;
+            } else {
+                // 솔로: 플레이어 왼쪽, 적 오른쪽
+                player.x = leftX;
+            }
+            player.y = centerY;
             player.health = player.maxHealth;
             player.displayHealth = player.maxHealth;
             player.ammo = player.maxAmmo;
@@ -3266,8 +3522,10 @@
             player.timeStopCooldown = 0;
             player.timeStopEndTime = 0;
 
-            // 적 상태 초기화
-            enemy.x = gameState.mapBounds.minX + (gameState.mapBounds.maxX - gameState.mapBounds.minX) * 0.8;
+            // 적 상태 초기화 - 멀티플레이어가 아닐 때만 위치 설정 (위에서 이미 설정함)
+            if (!gameState.isMultiplayer) {
+                enemy.x = gameState.mapBounds.minX + (gameState.mapBounds.maxX - gameState.mapBounds.minX) * 0.8;
+            }
             enemy.y = gameState.mapBounds.minY + (gameState.mapBounds.maxY - gameState.mapBounds.minY) * 0.5;
             enemy.health = enemy.maxHealth;
             enemy.displayHealth = enemy.maxHealth;
@@ -3322,14 +3580,16 @@
             gameState.countdown = 3;
             gameState.isPaused = true;
             
-            // 카운트다운 처리
-            const countdownInterval = setInterval(() => {
-                gameState.countdown--;
-                if (gameState.countdown <= 0) {
-                    clearInterval(countdownInterval);
-                    gameState.isPaused = false;
-                }
-            }, 1000);
+            // 카운트다운 처리 - 멀티플레이어 게스트는 호스트의 카운트다운을 따름
+            if (!gameState.isMultiplayer || isHost) {
+                const countdownInterval = setInterval(() => {
+                    gameState.countdown--;
+                    if (gameState.countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        gameState.isPaused = false;
+                    }
+                }, 1000);
+            }
         }
 
         // 게임 종료
@@ -3365,14 +3625,38 @@
         function restartGame() {
             // 스크롤을 맨 위로 이동
             window.scrollTo(0, 0);
+            
+            // 멀티플레이어 연결 정리
+            if (gameState.isMultiplayer || multiplayerPeer) {
+                gameState.isMultiplayer = false;
+                gameStarted = false;
+                myTeam = null;
+                opponentTeam = null;
+                opponentReady = false;
+                if (multiplayerPeer) {
+                    multiplayerPeer.destroy();
+                    multiplayerPeer = null;
+                }
+                multiplayerConnection = null;
+                currentRoomCode = null;
+            }
+            
+            // 플레이어 색상 초기화
+            player.color = '#4a9eff';
+            enemy.color = '#e94560';
+            
             // 메뉴로 돌아가기
             gameState.isMenu = true;
             gameState.isGameOver = false;
             document.getElementById('gameOverModal').style.display = 'none';
             document.getElementById('mainMenu').style.display = 'flex';
             
+            // 닉네임 표시
+            showNicknameDisplay();
+            
             // 모드 선택 접기
             collapseModeSelection();
+            collapseMultiModeSelection();
             
             // 첫 라운드 카운트다운 시작
             gameState.isPaused = true;
@@ -3586,7 +3870,8 @@
             const fixedBarWidth = 150; // 고정된 바 길이 (200 -> 150)
             const barHeight = 20;
             const borderRadius = 4;
-            const color = isPlayer ? '#4a9eff' : '#e94560';
+            // 멀티플레이어: 캐릭터의 실제 색상 사용, 솔로: 기본 색상
+            const color = character.color || (isPlayer ? '#4a9eff' : '#e94560');
             
             // 배경 (빈 바)
             ctx.save();
@@ -4569,11 +4854,28 @@
             const startX = (canvas.width - totalWidth) / 2;
             const y = 35; // 살짝 아래로 내림
 
-            // 왼쪽 그룹: 플레이어 승리 (파란색)
+            // 멀티플레이어: 팀 기준으로 승리 수 계산
+            // 왼쪽은 항상 파란팀, 오른쪽은 항상 빨간팀
+            let blueWins, redWins;
+            if (gameState.isMultiplayer && myTeam) {
+                if (myTeam === 'blue') {
+                    blueWins = gameState.playerWins;
+                    redWins = gameState.enemyWins;
+                } else {
+                    blueWins = gameState.enemyWins;
+                    redWins = gameState.playerWins;
+                }
+            } else {
+                // 솔로: 플레이어=파란, 적=빨강
+                blueWins = gameState.playerWins;
+                redWins = gameState.enemyWins;
+            }
+
+            // 왼쪽 그룹: 파란팀 승리 (파란색)
             for (let i = 0; i < diamondsPerGroup; i++) {
                 let color;
-                if (i < gameState.playerWins) {
-                    // 플레이어 승리: 파란색
+                if (i < blueWins) {
+                    // 파란팀 승리: 파란색
                     color = 'rgba(74, 158, 255, 0.8)';
                 } else {
                     // 아직 진행되지 않은 라운드: 반투명 회색
@@ -4584,12 +4886,12 @@
                 drawDiamond(x, y, diamondSize, color);
             }
             
-            // 오른쪽 그룹: AI 승리 (빨간색) - 오른쪽부터 채워짐
+            // 오른쪽 그룹: 빨간팀 승리 (빨간색) - 오른쪽부터 채워짐
             for (let i = 0; i < diamondsPerGroup; i++) {
                 let color;
                 // 오른쪽부터 채우기 위해 역순으로 계산
-                if ((diamondsPerGroup - 1 - i) < gameState.enemyWins) {
-                    // AI 승리: 빨간색
+                if ((diamondsPerGroup - 1 - i) < redWins) {
+                    // 빨간팀 승리: 빨간색
                     color = 'rgba(233, 69, 96, 0.8)';
                 } else {
                     // 아직 진행되지 않은 라운드: 반투명 회색
@@ -4748,9 +5050,21 @@
             }
         }
 
+        function collapseMultiModeSelection() {
+            const multiModeSelection = document.getElementById('multiModeSelection');
+            if (multiModeSelection.classList.contains('expanded')) {
+                multiModeSelection.classList.remove('expanded');
+                // 도감만 원래 위치로
+                document.getElementById('collectionText').classList.remove('moved-down');
+            }
+        }
+
         function showModeSelection() {
             const modeSelection = document.getElementById('modeSelection');
             const isExpanded = modeSelection.classList.contains('expanded');
+            
+            // 멀티플레이 선택이 펼쳐져 있으면 접기
+            collapseMultiModeSelection();
             
             if (isExpanded) {
                 // 접기: 모드 선택 화면 숨기기
@@ -4765,6 +5079,842 @@
                 document.getElementById('settingsText').classList.remove('moved-down');
                 document.getElementById('controlsText').classList.remove('moved-down');
             }
+        }
+
+        function showMultiModeSelection() {
+            const multiModeSelection = document.getElementById('multiModeSelection');
+            const isExpanded = multiModeSelection.classList.contains('expanded');
+            
+            // 솔로플레이 선택이 펼쳐져 있으면 접기
+            collapseModeSelection();
+            
+            if (isExpanded) {
+                // 접기: 멀티 모드 선택 화면 숨기기
+                collapseMultiModeSelection();
+            } else {
+                // 펼치기: 멀티 모드 선택 화면 표시
+                multiModeSelection.classList.add('expanded');
+                // 도감만 내리기 (멀티플레이와 도감 사이 간격만 넓히기)
+                document.getElementById('collectionText').classList.add('moved-down');
+            }
+        }
+
+        // 닉네임 변수
+        let playerNickname = localStorage.getItem('playerNickname') || null;
+        let opponentNickname = null;
+        
+        // 멀티플레이 변수
+        let multiplayerPeer = null;
+        let multiplayerConnection = null;
+        let currentRoomCode = null;
+        let isHost = false;
+        let myTeam = null; // 'blue' 또는 'red'
+        let opponentTeam = null;
+        let opponentReady = false; // 상대방 연결 및 팀 선택 완료
+        let gameStarted = false; // 게임 시작 여부
+        
+        // 닉네임 확인 (처음 접속 시에만 물어봄)
+        function checkNickname() {
+            if (!playerNickname || playerNickname.trim() === '') {
+                document.getElementById('nicknameModal').style.display = 'block';
+            } else {
+                showNicknameDisplay();
+            }
+        }
+        
+        // 닉네임 저장
+        function saveNickname() {
+            const input = document.getElementById('nicknameInput');
+            const nickname = input.value.trim();
+            
+            if (nickname.length < 1) {
+                input.style.borderColor = '#e94560';
+                return;
+            }
+            
+            playerNickname = nickname;
+            localStorage.setItem('playerNickname', nickname);
+            document.getElementById('nicknameModal').style.display = 'none';
+            showNicknameDisplay();
+        }
+        
+        // 닉네임 표시
+        function showNicknameDisplay() {
+            const nicknameDisplay = document.getElementById('nicknameDisplay');
+            const playerNicknameSpan = document.getElementById('playerNickname');
+            
+            if (playerNickname && nicknameDisplay && playerNicknameSpan) {
+                playerNicknameSpan.textContent = playerNickname;
+                nicknameDisplay.style.display = 'block';
+            }
+        }
+        
+        // 닉네임 숨기기
+        function hideNicknameDisplay() {
+            const nicknameDisplay = document.getElementById('nicknameDisplay');
+            if (nicknameDisplay) {
+                nicknameDisplay.style.display = 'none';
+            }
+        }
+        
+        // 페이지 로드 시 닉네임 확인
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                checkNickname();
+            }, 100);
+        });
+
+        function generateRoomCode() {
+            return Math.floor(10000 + Math.random() * 90000).toString();
+        }
+
+        function createRoom() {
+            const modal = document.getElementById('roomModal');
+            const title = document.getElementById('roomModalTitle');
+            const roomCodeSection = document.getElementById('roomCodeSection');
+            const joinInput = document.getElementById('roomJoinInput');
+            const teamSelectUI = document.getElementById('teamSelectUI');
+            const roomCodeElement = document.getElementById('roomCode');
+            const waitingMessage = document.getElementById('waitingMessage');
+            
+            // 방 코드 생성
+            currentRoomCode = generateRoomCode();
+            isHost = true;
+            
+            // UI 설정
+            title.textContent = '방 생성';
+            roomCodeSection.style.display = 'block';
+            joinInput.style.display = 'none';
+            teamSelectUI.style.display = 'none';
+            roomCodeElement.textContent = currentRoomCode;
+            waitingMessage.textContent = '상대방을 기다리는 중...';
+            waitingMessage.style.color = '#4a9eff';
+            
+            modal.style.display = 'block';
+            
+            // 멀티 메뉴 접기
+            collapseMultiModeSelection();
+            
+            // PeerJS 연결 초기화
+            initPeerConnection(currentRoomCode);
+        }
+
+        function showJoinRoom() {
+            const modal = document.getElementById('roomModal');
+            const title = document.getElementById('roomModalTitle');
+            const roomCodeSection = document.getElementById('roomCodeSection');
+            const joinInput = document.getElementById('roomJoinInput');
+            const teamSelectUI = document.getElementById('teamSelectUI');
+            const joinCodeInput = document.getElementById('joinCodeInput');
+            const errorMessage = document.getElementById('joinErrorMessage');
+            
+            isHost = false;
+            
+            // UI 설정
+            title.textContent = '방 입장';
+            roomCodeSection.style.display = 'none';
+            joinInput.style.display = 'block';
+            teamSelectUI.style.display = 'none';
+            joinCodeInput.value = '';
+            errorMessage.style.display = 'none';
+            
+            modal.style.display = 'block';
+            
+            // 멀티 메뉴 접기
+            collapseMultiModeSelection();
+            
+            // 입력 필드에 포커스
+            setTimeout(() => joinCodeInput.focus(), 100);
+        }
+
+        function joinRoom() {
+            const joinCodeInput = document.getElementById('joinCodeInput');
+            const errorMessage = document.getElementById('joinErrorMessage');
+            const code = joinCodeInput.value.trim();
+            
+            if (code.length !== 5 || !/^\d+$/.test(code)) {
+                errorMessage.textContent = '5자리 숫자를 입력해주세요';
+                errorMessage.style.display = 'block';
+                return;
+            }
+            
+            currentRoomCode = code;
+            errorMessage.style.display = 'none';
+            
+            // PeerJS로 방에 연결 시도
+            connectToRoom(code);
+        }
+
+        function closeRoomModal(keepConnection = false) {
+            const modal = document.getElementById('roomModal');
+            modal.style.display = 'none';
+            
+            // UI 초기화
+            document.getElementById('roomCodeSection').style.display = 'none';
+            document.getElementById('roomJoinInput').style.display = 'none';
+            document.getElementById('teamSelectUI').style.display = 'none';
+            document.getElementById('startGameBtn').style.display = 'none';
+            document.getElementById('guestWaitingMessage').style.display = 'none';
+            document.getElementById('blueTeamPlayer').innerHTML = '';
+            document.getElementById('redTeamPlayer').innerHTML = '';
+            document.getElementById('joinCodeInput').value = '';
+            document.getElementById('roomModalTitle').style.display = 'block';
+            
+            // keepConnection이 false일 때만 연결 정리 (나가기 버튼 누를 때)
+            if (!keepConnection) {
+                // 상대방에게 나가기 알림
+                if (multiplayerConnection && multiplayerConnection.open) {
+                    sendMultiplayerData({ type: 'leave' });
+                }
+                
+                myTeam = null;
+                opponentTeam = null;
+                opponentReady = false;
+                opponentNickname = null;
+                if (multiplayerPeer) {
+                    multiplayerPeer.destroy();
+                    multiplayerPeer = null;
+                }
+                multiplayerConnection = null;
+                currentRoomCode = null;
+            }
+        }
+
+        function initPeerConnection(roomCode) {
+            const waitingMessage = document.getElementById('waitingMessage');
+            
+            // PeerJS 인스턴스 생성 (방 코드를 ID로 사용)
+            const peerId = 'revolver-duel-' + roomCode;
+            
+            try {
+                multiplayerPeer = new Peer(peerId);
+                
+                multiplayerPeer.on('open', (id) => {
+                    console.log('PeerJS 연결됨, ID:', id);
+                    waitingMessage.textContent = '상대방을 기다리는 중...';
+                });
+                
+                multiplayerPeer.on('connection', (conn) => {
+                    console.log('상대방 연결됨!');
+                    multiplayerConnection = conn;
+                    
+                    conn.on('open', () => {
+                        // 방 코드 섹션 숨기고 팀 선택 UI 표시
+                        document.getElementById('roomCodeSection').style.display = 'none';
+                        document.getElementById('teamSelectUI').style.display = 'block';
+                        document.getElementById('roomModalTitle').style.display = 'none';
+                        
+                        // 내 닉네임 전송
+                        sendMultiplayerData({
+                            type: 'nickname',
+                            nickname: playerNickname
+                        });
+                    });
+                    
+                    conn.on('data', (data) => {
+                        handleMultiplayerData(data);
+                    });
+                    
+                    conn.on('close', () => {
+                        console.log('상대방 연결 끊김');
+                        // 게임 중일 때만 disconnect 처리
+                        if (gameState.isMultiplayer && !gameState.isMenu) {
+                            handleDisconnect();
+                        }
+                    });
+                });
+                
+                multiplayerPeer.on('error', (err) => {
+                    console.error('PeerJS 에러:', err);
+                    waitingMessage.textContent = '연결 오류가 발생했습니다';
+                    waitingMessage.style.color = '#e94560';
+                });
+            } catch (e) {
+                console.error('PeerJS 초기화 실패:', e);
+                waitingMessage.textContent = 'PeerJS 로드 실패. 페이지를 새로고침 해주세요.';
+                waitingMessage.style.color = '#e94560';
+            }
+        }
+
+        function connectToRoom(roomCode) {
+            const errorMessage = document.getElementById('joinErrorMessage');
+            const joinInput = document.getElementById('roomJoinInput');
+            
+            const peerId = 'revolver-duel-' + roomCode;
+            
+            try {
+                // 새 Peer 인스턴스 생성 (고유 ID로)
+                const myId = 'revolver-duel-guest-' + Math.random().toString(36).substr(2, 9);
+                multiplayerPeer = new Peer(myId);
+                
+                multiplayerPeer.on('open', () => {
+                    console.log('PeerJS 연결됨, 방에 접속 시도...');
+                    
+                    // 호스트에 연결
+                    multiplayerConnection = multiplayerPeer.connect(peerId);
+                    
+                    multiplayerConnection.on('open', () => {
+                        console.log('방에 연결됨!');
+                        
+                        // 코드 입력 UI 숨기고 팀 선택 UI 표시
+                        document.getElementById('roomJoinInput').style.display = 'none';
+                        document.getElementById('teamSelectUI').style.display = 'block';
+                        document.getElementById('roomModalTitle').style.display = 'none';
+                        
+                        // 내 닉네임 전송
+                        sendMultiplayerData({
+                            type: 'nickname',
+                            nickname: playerNickname
+                        });
+                    });
+                    
+                    multiplayerConnection.on('data', (data) => {
+                        handleMultiplayerData(data);
+                    });
+                    
+                    multiplayerConnection.on('close', () => {
+                        console.log('연결 끊김');
+                        // 게임 중일 때만 disconnect 처리
+                        if (gameState.isMultiplayer && !gameState.isMenu) {
+                            handleDisconnect();
+                        }
+                    });
+                    
+                    multiplayerConnection.on('error', (err) => {
+                        console.error('연결 에러:', err);
+                        errorMessage.textContent = '방을 찾을 수 없습니다';
+                        errorMessage.style.display = 'block';
+                    });
+                    
+                    // 연결 타임아웃 (5초)
+                    setTimeout(() => {
+                        if (!multiplayerConnection || !multiplayerConnection.open) {
+                            errorMessage.textContent = '방을 찾을 수 없습니다';
+                            errorMessage.style.display = 'block';
+                            if (multiplayerPeer) {
+                                multiplayerPeer.destroy();
+                                multiplayerPeer = null;
+                            }
+                        }
+                    }, 5000);
+                });
+                
+                multiplayerPeer.on('error', (err) => {
+                    console.error('PeerJS 에러:', err);
+                    errorMessage.textContent = '연결 오류가 발생했습니다';
+                    errorMessage.style.display = 'block';
+                });
+            } catch (e) {
+                console.error('PeerJS 초기화 실패:', e);
+                errorMessage.textContent = 'PeerJS 로드 실패';
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        function handleMultiplayerData(data) {
+            if (!data || !data.type) return;
+            
+            switch (data.type) {
+                case 'gameState':
+                    // 게임이 시작되지 않았으면 무시
+                    if (!gameStarted) return;
+                    
+                    // 상대방의 플레이어 상태를 우리의 enemy에 적용
+                    if (data.player) {
+                        enemy.x = data.player.x;
+                        enemy.y = data.player.y;
+                        enemy.angle = data.player.angle;
+                        enemy.health = data.player.health;
+                        enemy.displayHealth = data.player.displayHealth;
+                        enemy.ammo = data.player.ammo;
+                        enemy.maxAmmo = data.player.maxAmmo;
+                        enemy.isReloading = data.player.isReloading;
+                        enemy.reloadStartTime = data.player.reloadStartTime;
+                        enemy.reloadTime = data.player.reloadTime;
+                        enemy.isDodging = data.player.isDodging;
+                        enemy.isInvincible = data.player.isInvincible;
+                        enemy.isReviving = data.player.isReviving;
+                        enemy.shieldReady = data.player.shieldReady;
+                        enemy.reflectActive = data.player.reflectActive;
+                        enemy.isFortified = data.player.isFortified;
+                    }
+                    
+                    // 게임 상태 동기화 (isPaused, countdown)
+                    if (data.gameState) {
+                        // 호스트의 isPaused 상태를 따름
+                        if (isHost === false) {
+                            gameState.isPaused = data.gameState.isPaused;
+                            gameState.countdown = data.gameState.countdown;
+                        }
+                    }
+                    break;
+                    
+                case 'shoot':
+                    // 상대방이 총을 쐈을 때
+                    if (data.bullets) {
+                        data.bullets.forEach(bulletData => {
+                            const bullet = new Bullet(
+                                bulletData.x,
+                                bulletData.y,
+                                bulletData.angle,
+                                enemy,
+                                false
+                            );
+                            bullet.damage = bulletData.damage || enemy.damage;
+                            bullet.hasPoison = bulletData.hasPoison || false;
+                            bullet.hasBouncy = bulletData.hasBouncy || false;
+                            bullet.maxBounces = bulletData.maxBounces || 0;
+                            enemy.bullets.push(bullet);
+                        });
+                    }
+                    break;
+                    
+                case 'teamSelect':
+                    // 상대방 팀 선택
+                    opponentTeam = data.team;
+                    updateTeamUI();
+                    break;
+                    
+                case 'nickname':
+                    // 상대방 닉네임 수신
+                    opponentNickname = data.nickname;
+                    opponentReady = true;
+                    updateTeamUI();
+                    break;
+                
+                case 'leave':
+                    // 상대방이 방을 나감 (메시지 보내지 않고 정리)
+                    alert('상대방이 나갔습니다');
+                    // 연결 먼저 정리 (leave 메시지 중복 방지)
+                    if (multiplayerConnection) {
+                        multiplayerConnection.close();
+                        multiplayerConnection = null;
+                    }
+                    closeRoomModal(true); // keepConnection=true로 해서 다시 leave 메시지 안 보냄
+                    // 추가 정리
+                    myTeam = null;
+                    opponentTeam = null;
+                    opponentReady = false;
+                    opponentNickname = null;
+                    if (multiplayerPeer) {
+                        multiplayerPeer.destroy();
+                        multiplayerPeer = null;
+                    }
+                    currentRoomCode = null;
+                    break;
+                    
+                case 'startGame':
+                    // 호스트가 게임 시작
+                    if (!isHost) {
+                        closeRoomModal(true);
+                        startMultiplayerGame();
+                    }
+                    break;
+                    
+                case 'roundEnd':
+                    // 라운드 종료 동기화 - 게스트만 처리
+                    if (!isHost && data.winner) {
+                        if (data.winner === 'host') {
+                            // 호스트가 이김 = 나(게스트)가 짐
+                            handleRoundEndFromHost('enemy');
+                        } else {
+                            // 게스트가 이김 = 나(게스트)가 이김
+                            handleRoundEndFromHost('player');
+                        }
+                    }
+                    break;
+                    
+                case 'augmentSelected':
+                    // 상대방 증강 선택 완료
+                    if (data.augment) {
+                        const aug = augmentations.find(a => a.id === data.augment.id);
+                        if (aug) {
+                            aug.effect(enemy);
+                            enemy.augmentations.push(aug);
+                        }
+                    }
+                    // 상대 선택 완료 - 다음 라운드로
+                    gameState.showOpponentSelecting = false;
+                    setTimeout(() => {
+                        nextRound();
+                    }, 500);
+                    break;
+                    
+                case 'nextRound':
+                    // 다음 라운드 시작
+                    if (!isHost) {
+                        nextRound();
+                    }
+                    break;
+            }
+        }
+        
+        // 게스트용: 호스트로부터 라운드 종료 받음
+        function handleRoundEndFromHost(winner) {
+            gameState.isPaused = true;
+            gameState.roundWins.push(winner);
+            
+            if (winner === 'player') {
+                gameState.playerWins++;
+            } else {
+                gameState.enemyWins++;
+            }
+            
+            // 승리 체크
+            if (gameState.playerWins >= gameState.winsNeeded || gameState.enemyWins >= gameState.winsNeeded) {
+                endGame(winner);
+                return;
+            }
+            
+            // 증강 선택
+            if (winner === 'player') {
+                // 내가 승리: 상대가 증강 선택 중 - 15초 카운트다운만 표시
+                gameState.showOpponentSelecting = true;
+                gameState.augmentCountdown = 15;
+                startOpponentWaitCountdown();
+            } else {
+                // 내가 패배: 증강 선택
+                showAugmentModal(player);
+            }
+        }
+        
+        // 상대방 증강 선택 대기 카운트다운
+        function startOpponentWaitCountdown() {
+            const countdownInterval = setInterval(() => {
+                gameState.augmentCountdown--;
+                if (gameState.augmentCountdown <= 0 || !gameState.showOpponentSelecting) {
+                    clearInterval(countdownInterval);
+                    gameState.augmentCountdown = 0;
+                }
+            }, 1000);
+        }
+        
+        // 팀 선택
+        function selectTeam(team) {
+            // 상대방이 이미 그 팀을 선택했으면 선택 불가
+            if (opponentTeam === team) {
+                return;
+            }
+            
+            myTeam = team;
+            
+            // 상대방에게 팀 선택 알림
+            sendMultiplayerData({
+                type: 'teamSelect',
+                team: team
+            });
+            
+            updateTeamUI();
+        }
+        
+        // 팀 UI 업데이트
+        function updateTeamUI() {
+            const blueTeamPlayer = document.getElementById('blueTeamPlayer');
+            const redTeamPlayer = document.getElementById('redTeamPlayer');
+            const blueTeamBox = document.getElementById('blueTeamBox');
+            const redTeamBox = document.getElementById('redTeamBox');
+            const teamSelectStatus = document.getElementById('teamSelectStatus');
+            
+            // 왕관 아이콘 (호스트 표시) - 노란색
+            const crownIcon = '<span style="color: #ffc107; margin-left: 5px;">★</span>';
+            
+            // 테두리 스타일 (닉네임이 있을 때만) - min-width로 크기 통일
+            const borderStyle = 'padding: 4px 15px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 5px; display: inline-block; min-width: 80px; text-align: center;';
+            
+            // 파란팀 표시
+            if (myTeam === 'blue') {
+                const name = playerNickname || '나';
+                blueTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + (isHost ? name + crownIcon : name) + '</span>';
+                blueTeamBox.style.boxShadow = '0 0 20px rgba(74, 158, 255, 0.5)';
+            } else if (opponentTeam === 'blue') {
+                const name = opponentNickname || '상대방';
+                blueTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + (!isHost ? name + crownIcon : name) + '</span>';
+                blueTeamBox.style.boxShadow = 'none';
+            } else {
+                blueTeamPlayer.innerHTML = '';
+                blueTeamBox.style.boxShadow = 'none';
+            }
+            
+            // 빨간팀 표시
+            if (myTeam === 'red') {
+                const name = playerNickname || '나';
+                redTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + (isHost ? name + crownIcon : name) + '</span>';
+                redTeamBox.style.boxShadow = '0 0 20px rgba(233, 69, 96, 0.5)';
+            } else if (opponentTeam === 'red') {
+                const name = opponentNickname || '상대방';
+                redTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + (!isHost ? name + crownIcon : name) + '</span>';
+                redTeamBox.style.boxShadow = 'none';
+            } else {
+                redTeamPlayer.innerHTML = '';
+                redTeamBox.style.boxShadow = 'none';
+            }
+            
+            // 상태 메시지
+            if (myTeam && opponentTeam) {
+                teamSelectStatus.textContent = '양쪽 모두 팀 선택 완료!';
+                teamSelectStatus.style.color = '#00ff00';
+            } else if (myTeam) {
+                teamSelectStatus.textContent = '상대방이 팀을 선택하는 중...';
+                teamSelectStatus.style.color = '#ffc107';
+            } else {
+                teamSelectStatus.textContent = '팀을 선택해주세요';
+                teamSelectStatus.style.color = '#aaa';
+            }
+            
+            // 호스트: 양쪽 모두 팀 선택 완료하면 시작 버튼 표시
+            if (isHost && myTeam && opponentTeam) {
+                document.getElementById('startGameBtn').style.display = 'block';
+            }
+            
+            // 게스트: 대기 메시지 표시
+            if (!isHost && myTeam) {
+                document.getElementById('guestWaitingMessage').style.display = 'block';
+            }
+        }
+        
+        // 게임 시작 신호 전송 (호스트만)
+        function sendStartGame() {
+            if (!isHost || !myTeam) return;
+            
+            // 상대방에게 게임 시작 알림
+            sendMultiplayerData({ type: 'startGame' });
+            
+            // 자신도 게임 시작
+            closeRoomModal(true);
+            startMultiplayerGame();
+        }
+        
+        // 연결 끊김 확인
+        function confirmDisconnect() {
+            document.getElementById('disconnectModal').style.display = 'none';
+            restartGame();
+        }
+
+        function handleDisconnect() {
+            // 연결 끊김 처리
+            gameState.isMultiplayer = false;
+            gameStarted = false;
+            
+            // 게임 중이었으면 모달 표시
+            if (!gameState.isMenu) {
+                document.getElementById('disconnectModal').style.display = 'block';
+            }
+        }
+
+        // 멀티플레이어 데이터 전송
+        function sendMultiplayerData(data) {
+            if (multiplayerConnection && multiplayerConnection.open) {
+                multiplayerConnection.send(data);
+            }
+        }
+
+        // 플레이어 상태 전송 (게임 루프에서 호출)
+        function sendPlayerState() {
+            if (!gameState.isMultiplayer || !multiplayerConnection) return;
+            
+            const now = Date.now();
+            // 30ms마다 전송 (약 33fps)
+            if (now - gameState.lastSyncTime < 30) return;
+            gameState.lastSyncTime = now;
+            
+            sendMultiplayerData({
+                type: 'gameState',
+                player: {
+                    x: player.x,
+                    y: player.y,
+                    angle: player.angle,
+                    health: player.health,
+                    displayHealth: player.displayHealth,
+                    ammo: player.ammo,
+                    maxAmmo: player.maxAmmo,
+                    isReloading: player.isReloading,
+                    reloadStartTime: player.reloadStartTime,
+                    reloadTime: player.reloadTime,
+                    isDodging: player.isDodging,
+                    isInvincible: player.isInvincible,
+                    isReviving: player.isReviving,
+                    shieldReady: player.shieldReady,
+                    reflectActive: player.reflectActive,
+                    isFortified: player.isFortified
+                },
+                gameState: {
+                    isPaused: gameState.isPaused,
+                    countdown: gameState.countdown
+                }
+            });
+        }
+
+        // 총알 발사 전송
+        function sendShootData(bullets) {
+            if (!gameState.isMultiplayer) return;
+            
+            const bulletDataArray = bullets.map(b => ({
+                x: b.x,
+                y: b.y,
+                angle: b.angle,
+                damage: b.damage,
+                hasPoison: b.hasPoison,
+                hasBouncy: b.hasBouncy,
+                maxBounces: b.maxBounces
+            }));
+            
+            sendMultiplayerData({
+                type: 'shoot',
+                bullets: bulletDataArray
+            });
+        }
+
+        function startMultiplayerGame() {
+            console.log('멀티플레이어 게임 시작! 호스트:', isHost, '팀:', myTeam);
+            
+            gameStarted = true;
+            
+            // 게임 상태 초기화
+            gameState.isMultiplayer = true;
+            gameState.isMenu = false;
+            gameState.gameMode = 'classic'; // 멀티플레이는 클래식 모드
+            gameState.round = 1;
+            gameState.playerWins = 0;
+            gameState.enemyWins = 0;
+            gameState.roundWins = [];
+            gameState.gameTime = 180;
+            gameState.isGameOver = false;
+            gameState.countdown = 3;
+            gameState.isPaused = true;
+            
+            // 메인 메뉴 숨기기
+            document.getElementById('mainMenu').style.display = 'none';
+            
+            // 닉네임 숨기기
+            hideNicknameDisplay();
+            
+            // 맵 경계 설정
+            gameState.mapBounds = {
+                minX: 0,
+                minY: 0,
+                maxX: canvas.width,
+                maxY: canvas.height
+            };
+            
+            // 팀에 따른 색상 및 위치 설정
+            const isBlueTeam = myTeam === 'blue';
+            player.color = isBlueTeam ? '#4a9eff' : '#e94560';
+            enemy.color = isBlueTeam ? '#e94560' : '#4a9eff';
+            
+            // 파란팀은 왼쪽, 빨간팀은 오른쪽
+            const leftX = gameState.mapBounds.minX + (gameState.mapBounds.maxX - gameState.mapBounds.minX) * 0.2;
+            const rightX = gameState.mapBounds.minX + (gameState.mapBounds.maxX - gameState.mapBounds.minX) * 0.8;
+            const centerY = gameState.mapBounds.minY + (gameState.mapBounds.maxY - gameState.mapBounds.minY) * 0.5;
+            
+            player.x = isBlueTeam ? leftX : rightX;
+            player.y = centerY;
+            enemy.x = isBlueTeam ? rightX : leftX;
+            enemy.y = centerY;
+            
+            // 플레이어 초기화
+            player.health = 5;
+            player.displayHealth = 5;
+            player.maxHealth = 5;
+            player.ammo = 6;
+            player.maxAmmo = 6;
+            player.bullets = [];
+            player.augmentations = [];
+            player.damage = 1;
+            player.speed = 3;
+            player.bulletSpeedMultiplier = 1;
+            player.bulletSizeMultiplier = 1;
+            player.reloadTime = 3000;
+            player.baseReloadTime = 3000;
+            player.shootCooldown = 1000;
+            player.isReloading = false;
+            player.isDodging = false;
+            player.isReviving = false;
+            player.isInvincible = false;
+            player.hasRevived = 0;
+            resetPlayerAugments(player);
+            
+            // 적(상대방) 초기화
+            enemy.health = 5;
+            enemy.displayHealth = 5;
+            enemy.maxHealth = 5;
+            enemy.ammo = 6;
+            enemy.maxAmmo = 6;
+            enemy.bullets = [];
+            enemy.augmentations = [];
+            enemy.damage = 1;
+            enemy.speed = 3;
+            enemy.bulletSpeedMultiplier = 1;
+            enemy.bulletSizeMultiplier = 1;
+            enemy.reloadTime = 3000;
+            enemy.baseReloadTime = 3000;
+            enemy.shootCooldown = 1000;
+            enemy.isReloading = false;
+            enemy.isDodging = false;
+            enemy.isReviving = false;
+            enemy.isInvincible = false;
+            enemy.hasRevived = 0;
+            resetPlayerAugments(enemy);
+            
+            // 카운트다운 시작
+            const countdownInterval = setInterval(() => {
+                gameState.countdown--;
+                if (gameState.countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    gameState.isPaused = false;
+                }
+            }, 1000);
+        }
+        
+        // 플레이어 증강 상태 초기화 헬퍼 함수
+        function resetPlayerAugments(char) {
+            char.hasCritical = false;
+            char.hasDoubleShot = false;
+            char.hasDodge = false;
+            char.hasRevive = false;
+            char.hasDeepWound = false;
+            char.hasOneShotOneKill = false;
+            char.hasPoisonBullet = false;
+            char.hasReloadHeal = false;
+            char.hasSurvivalInstinct = false;
+            char.hasLastBullet = false;
+            char.hasRecoveryContract = false;
+            char.hasRecoveryContractUsed = false;
+            char.hasFocusedFire = false;
+            char.hasShotgun = false;
+            char.hasRagged = false;
+            char.hasGhost = false;
+            char.hasFortify = false;
+            char.isFortified = false;
+            char.hasOverheat = false;
+            char.hasGamble = false;
+            char.hasWeaken = false;
+            char.isWeakened = false;
+            char.hasDamageBoost = false;
+            char.hasLightning = false;
+            char.isStunned = false;
+            char.hasShield = false;
+            char.shieldReady = false;
+            char.hasRegeneration = false;
+            char.hasEvasiveManeuver = false;
+            char.hasCombatExperience = false;
+            char.hasHallucination = false;
+            char.hasTasteOfBlood = false;
+            char.hasCannon = false;
+            char.hasTimeBarrier = false;
+            char.hasBouncyBullet = false;
+            char.hasGamble2 = false;
+            char.hasReflect = false;
+            char.reflectActive = false;
+            char.hasGatling = false;
+            char.hasTimeStop = false;
+            char.timeStopActive = false;
+            char.hasScatter = false;
+            char.hasRocket = false;
+            char.hasTrinity = false;
+            char.hasJudgment = false;
+            char.hasBoomerang = false;
+            char.poisonEffects = [];
+            char.damageNumbers = [];
         }
 
         // 랜덤 모드 정의
@@ -4842,6 +5992,10 @@
             
             gameState.isMenu = false;
             document.getElementById('mainMenu').style.display = 'none';
+            
+            // 닉네임 숨기기
+            hideNicknameDisplay();
+            
             initGame();
         }
 
@@ -5375,6 +6529,26 @@
                     drawReloadBar(enemy, enemy.x + 40 + shakeX, enemy.y - 40 + shakeY);
                 }
             }
+            
+            // 멀티플레이어: 캐릭터 위에 닉네임 표시
+            if (gameState.isMultiplayer) {
+                ctx.save();
+                ctx.font = '14px Arial';
+                ctx.textAlign = 'center';
+                ctx.globalAlpha = 0.6;
+                
+                // 플레이어 닉네임
+                ctx.fillStyle = player.color;
+                ctx.fillText(playerNickname || '나', player.x + shakeX, player.y - player.radius - 10 + shakeY);
+                
+                // 상대방 닉네임
+                if (enemy.x > -500 && enemy.y > -500) {
+                    ctx.fillStyle = enemy.color;
+                    ctx.fillText(opponentNickname || '상대', enemy.x + shakeX, enemy.y - enemy.radius - 10 + shakeY);
+                }
+                
+                ctx.restore();
+            }
 
             // 시간장막 그리기 (플레이어)
             if (player.hasTimeBarrier) {
@@ -5598,30 +6772,45 @@
                 ctx.putImageData(imageData, 0, 0);
             }
 
-            // 플레이어 체력 표시 (왼쪽 위)
-            const playerHealthY = 20;
-            drawHealthHearts(player, 20, playerHealthY, true);
-            // 플레이어 탄환수 표시 (체력 아래 - 원으로)
-            const playerAmmoY = playerHealthY + 40;
-            drawAmmoCount(player, 20, playerAmmoY, 'left');
-            // 플레이어 증강 아이콘 표시 (탄환 아래)
-            drawAugmentIcons(player, 20, playerAmmoY + 50, 'left');
-            // 플레이어 재장전 바 표시 (플레이어 바로 왼쪽 위) - 플레이어 위치에 흔들림 적용
-            if (player.isReloading) {
-                drawReloadBar(player, player.x - 40 + shakeX, player.y - 40 + shakeY); // 캐릭터 크기 증가에 맞춰 조정
+            // 멀티플레이어: 팀 기준으로 UI 표시 (파란팀 왼쪽, 빨간팀 오른쪽)
+            // 솔로: 플레이어 왼쪽, 적 오른쪽
+            let leftChar, rightChar;
+            if (gameState.isMultiplayer && myTeam) {
+                // 멀티플레이어: 파란팀이 왼쪽, 빨간팀이 오른쪽
+                if (myTeam === 'blue') {
+                    leftChar = player;
+                    rightChar = enemy;
+                } else {
+                    leftChar = enemy;
+                    rightChar = player;
+                }
+            } else {
+                // 솔로: 플레이어 왼쪽, 적 오른쪽
+                leftChar = player;
+                rightChar = enemy;
             }
             
-            // 적 체력 표시 (오른쪽 위)
+            // 왼쪽 UI (파란팀 / 플레이어)
+            const leftHealthY = 20;
+            drawHealthHearts(leftChar, 20, leftHealthY, leftChar === player);
+            const leftAmmoY = leftHealthY + 40;
+            drawAmmoCount(leftChar, 20, leftAmmoY, 'left');
+            drawAugmentIcons(leftChar, 20, leftAmmoY + 50, 'left');
+            
+            // 오른쪽 UI (빨간팀 / 적)
             {
-                const fixedBarWidth = 150; // 고정된 바 길이
-                const enemyHealthX = canvas.width - fixedBarWidth - 20;
-                const enemyHealthY = 20;
-                drawHealthHearts(enemy, enemyHealthX, enemyHealthY, false);
-                // 적 탄환수 표시 (체력 아래, 오른쪽 정렬 - 원으로)
-                const enemyAmmoY = enemyHealthY + 40;
-                drawAmmoCount(enemy, enemyHealthX + fixedBarWidth, enemyAmmoY, 'right');
-                // 적 증강 아이콘 표시 (탄환 아래)
-                drawAugmentIcons(enemy, enemyHealthX + fixedBarWidth, enemyAmmoY + 50, 'right');
+                const fixedBarWidth = 150;
+                const rightHealthX = canvas.width - fixedBarWidth - 20;
+                const rightHealthY = 20;
+                drawHealthHearts(rightChar, rightHealthX, rightHealthY, rightChar === player);
+                const rightAmmoY = rightHealthY + 40;
+                drawAmmoCount(rightChar, rightHealthX + fixedBarWidth, rightAmmoY, 'right');
+                drawAugmentIcons(rightChar, rightHealthX + fixedBarWidth, rightAmmoY + 50, 'right');
+            }
+            
+            // 플레이어 재장전 바 표시 (플레이어 바로 옆) - 플레이어 위치에 흔들림 적용
+            if (player.isReloading) {
+                drawReloadBar(player, player.x - 40 + shakeX, player.y - 40 + shakeY);
             }
             // 증강 툴팁 표시
             if (hoveredAugment) {
@@ -6037,6 +7226,32 @@
                             });
                         }
                         gameState.flameLastDamage = now;
+                        
+                        // 화염 데미지로 체력이 0 이하가 되면 라운드 패배 처리
+                        if (player.health <= 0 && !player.isReviving) {
+                            // 부활 체크 (횟수 중첩)
+                            const reviveCount = player.reviveCount || 1;
+                            const hasRevivedCount = (typeof player.hasRevived === 'number' ? player.hasRevived : (player.hasRevived ? 1 : 0));
+                            if (player.hasRevive && hasRevivedCount < reviveCount) {
+                                player.hasRevived = hasRevivedCount + 1;
+                                player.isReviving = true;
+                                player.reviveTime = now + 1000;
+                            } else {
+                                endRound('enemy');
+                            }
+                        }
+                        if (enemy.health <= 0 && !enemy.isReviving) {
+                            // 부활 체크 (횟수 중첩)
+                            const reviveCount = enemy.reviveCount || 1;
+                            const hasRevivedCount = (typeof enemy.hasRevived === 'number' ? enemy.hasRevived : (enemy.hasRevived ? 1 : 0));
+                            if (enemy.hasRevive && hasRevivedCount < reviveCount) {
+                                enemy.hasRevived = hasRevivedCount + 1;
+                                enemy.isReviving = true;
+                                enemy.reviveTime = now + 1000;
+                            } else {
+                                endRound('player');
+                            }
+                        }
                     }
                 }
 
@@ -6044,10 +7259,11 @@
                 if (player.hasGatling && player.gatlingBullets > 0 && now >= player.gatlingNextShot) {
                     // 도박 증강: 각 발사마다 랜덤 배율 적용
                     let gatlingGambleMultiplier = 1;
-                    let gatlingBaseAngle = player.angle;
+                    // 저장된 게틀링 각도 사용 (발사 시작 시 방향 고정)
+                    let gatlingBaseAngle = player.gatlingAngle || player.angle;
                     if (player.hasGamble) {
                         const randomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
-                        gatlingBaseAngle = player.angle + randomAngle;
+                        gatlingBaseAngle = (player.gatlingAngle || player.angle) + randomAngle;
                         gatlingGambleMultiplier = 1 + Math.random(); // 1~2배
                     }
                     
@@ -6057,8 +7273,8 @@
                         scatterAngles.forEach(angleDeg => {
                             const angle = gatlingBaseAngle + (angleDeg * Math.PI / 180);
                             const bullet = new Bullet(
-                                player.x + Math.cos(player.angle) * player.radius,
-                                player.y + Math.sin(player.angle) * player.radius,
+                                player.x + Math.cos(player.gatlingAngle || player.angle) * player.radius,
+                                player.y + Math.sin(player.gatlingAngle || player.angle) * player.radius,
                                 angle,
                                 player,
                                 false
@@ -6072,8 +7288,8 @@
                         });
                     } else {
                         const bullet = new Bullet(
-                            player.x + Math.cos(player.angle) * player.radius,
-                            player.y + Math.sin(player.angle) * player.radius,
+                            player.x + Math.cos(player.gatlingAngle || player.angle) * player.radius,
+                            player.y + Math.sin(player.gatlingAngle || player.angle) * player.radius,
                             gatlingBaseAngle,
                             player,
                             false
@@ -6087,6 +7303,12 @@
                     player.gatlingBullets--;
                     player.gatlingNextShot = now + 100; // 0.1초마다
                     
+                    // 멀티플레이어: 게틀링 총알 전송
+                    if (gameState.isMultiplayer && player.bullets.length > 0) {
+                        const newBullets = player.bullets.slice(-10);
+                        sendShootData(newBullets);
+                    }
+                    
                     // 게틀링 발사가 끝나면 자동 재장전
                     if (player.gatlingBullets === 0 && !player.isReloading) {
                         reload(player);
@@ -6095,10 +7317,11 @@
                 if (enemy.hasGatling && enemy.gatlingBullets > 0 && now >= enemy.gatlingNextShot) {
                     // 도박 증강: 각 발사마다 랜덤 배율 적용
                     let gatlingGambleMultiplier = 1;
-                    let gatlingBaseAngle = enemy.angle;
+                    // 저장된 게틀링 각도 사용 (발사 시작 시 방향 고정)
+                    let gatlingBaseAngle = enemy.gatlingAngle || enemy.angle;
                     if (enemy.hasGamble) {
                         const randomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
-                        gatlingBaseAngle = enemy.angle + randomAngle;
+                        gatlingBaseAngle = (enemy.gatlingAngle || enemy.angle) + randomAngle;
                         gatlingGambleMultiplier = 1 + Math.random(); // 1~2배
                     }
                     
@@ -6108,8 +7331,8 @@
                         scatterAngles.forEach(angleDeg => {
                             const angle = gatlingBaseAngle + (angleDeg * Math.PI / 180);
                             const bullet = new Bullet(
-                                enemy.x + Math.cos(enemy.angle) * enemy.radius,
-                                enemy.y + Math.sin(enemy.angle) * enemy.radius,
+                                enemy.x + Math.cos(enemy.gatlingAngle || enemy.angle) * enemy.radius,
+                                enemy.y + Math.sin(enemy.gatlingAngle || enemy.angle) * enemy.radius,
                                 angle,
                                 enemy,
                                 false
@@ -6123,8 +7346,8 @@
                         });
                     } else {
                         const bullet = new Bullet(
-                            enemy.x + Math.cos(enemy.angle) * enemy.radius,
-                            enemy.y + Math.sin(enemy.angle) * enemy.radius,
+                            enemy.x + Math.cos(enemy.gatlingAngle || enemy.angle) * enemy.radius,
+                            enemy.y + Math.sin(enemy.gatlingAngle || enemy.angle) * enemy.radius,
                             gatlingBaseAngle,
                             enemy,
                             false
@@ -6145,9 +7368,19 @@
                 }
 
                 updatePlayer();
-                updateEnemy();
+                
+                // 멀티플레이어 모드가 아닐 때만 AI 업데이트
+                if (!gameState.isMultiplayer) {
+                    updateEnemy();
+                }
+                
                 updateBullets(enemy);
                 updateBullets(player);
+                
+                // 멀티플레이어 모드일 때 플레이어 상태 전송
+                if (gameState.isMultiplayer) {
+                    sendPlayerState();
+                }
             }
 
             draw();
