@@ -5616,19 +5616,17 @@
             const teamSelectStatus = document.getElementById('teamSelectStatus');
             
             // 왕관 아이콘 (호스트 표시) - 노란색
-            const crownIcon = '<span style="color: #ffc107; margin-left: 5px;">★</span>';
-            
-            // 테두리 스타일 (닉네임이 있을 때만) - min-width로 크기 통일
-            const borderStyle = 'padding: 4px 15px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 5px; display: inline-block; min-width: 80px; text-align: center;';
+            // 테두리 스타일 (닉네임이 있을 때만)
+            const borderStyle = 'padding: 4px 15px; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 5px; display: inline-block;';
             
             // 파란팀 표시
             if (myTeam === 'blue') {
                 const name = playerNickname || '나';
-                blueTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + (isHost ? name + crownIcon : name) + '</span>';
+                blueTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + name + '</span>';
                 blueTeamBox.style.boxShadow = '0 0 20px rgba(74, 158, 255, 0.5)';
             } else if (opponentTeam === 'blue') {
                 const name = opponentNickname || '상대방';
-                blueTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + (!isHost ? name + crownIcon : name) + '</span>';
+                blueTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + name + '</span>';
                 blueTeamBox.style.boxShadow = 'none';
             } else {
                 blueTeamPlayer.innerHTML = '';
@@ -5638,11 +5636,11 @@
             // 빨간팀 표시
             if (myTeam === 'red') {
                 const name = playerNickname || '나';
-                redTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + (isHost ? name + crownIcon : name) + '</span>';
+                redTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + name + '</span>';
                 redTeamBox.style.boxShadow = '0 0 20px rgba(233, 69, 96, 0.5)';
             } else if (opponentTeam === 'red') {
                 const name = opponentNickname || '상대방';
-                redTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + (!isHost ? name + crownIcon : name) + '</span>';
+                redTeamPlayer.innerHTML = '<span style="' + borderStyle + '">' + name + '</span>';
                 redTeamBox.style.boxShadow = 'none';
             } else {
                 redTeamPlayer.innerHTML = '';
