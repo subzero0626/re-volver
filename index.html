@@ -6792,6 +6792,9 @@
                         document.getElementById('teamSelectUI').style.display = 'block';
                         document.getElementById('roomModalTitle').style.display = 'none';
                         
+                        // UI 초기화
+                        updateTeamUI();
+                        
                         // 내 닉네임 전송
                         sendMultiplayerData({
                             type: 'nickname',
@@ -6851,6 +6854,9 @@
                         document.getElementById('roomJoinInput').style.display = 'none';
                         document.getElementById('teamSelectUI').style.display = 'block';
                         document.getElementById('roomModalTitle').style.display = 'none';
+                        
+                        // UI 초기화
+                        updateTeamUI();
                         
                         // 내 닉네임 전송
                         sendMultiplayerData({
@@ -7144,11 +7150,18 @@
             }
             
             // 호스트: 양쪽 모두 팀 선택 완료하면 시작 버튼 표시
-            if (isHost && myTeam && opponentTeam) {
-                document.getElementById('startGameBtn').style.display = 'block';
+            const startGameBtn = document.getElementById('startGameBtn');
+            if (startGameBtn) {
+                if (isHost && myTeam && opponentTeam) {
+                    startGameBtn.style.display = 'block';
+                    console.log('시작 버튼 표시:', { isHost, myTeam, opponentTeam });
+                } else {
+                    // 조건이 맞지 않으면 시작 버튼 숨기기
+                    startGameBtn.style.display = 'none';
+                    console.log('시작 버튼 숨김:', { isHost, myTeam, opponentTeam });
+                }
             } else {
-                // 조건이 맞지 않으면 시작 버튼 숨기기
-                document.getElementById('startGameBtn').style.display = 'none';
+                console.error('startGameBtn 요소를 찾을 수 없습니다!');
             }
             
             // 게스트: 대기 메시지 표시
