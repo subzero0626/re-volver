@@ -6611,6 +6611,11 @@
             // 멀티 메뉴 접기
             collapseMultiModeSelection();
             
+            // UI 초기화
+            document.getElementById('startGameBtn').style.display = 'none';
+            document.getElementById('guestWaitingMessage').style.display = 'none';
+            updateTeamUI();
+            
             // PeerJS 연결 초기화
             initPeerConnection(currentRoomCode);
         }
@@ -6651,6 +6656,11 @@
             
             // 멀티 메뉴 접기
             collapseMultiModeSelection();
+            
+            // UI 초기화
+            document.getElementById('startGameBtn').style.display = 'none';
+            document.getElementById('guestWaitingMessage').style.display = 'none';
+            updateTeamUI();
             
             // 입력 필드에 포커스
             setTimeout(() => joinCodeInput.focus(), 100);
@@ -7136,11 +7146,16 @@
             // 호스트: 양쪽 모두 팀 선택 완료하면 시작 버튼 표시
             if (isHost && myTeam && opponentTeam) {
                 document.getElementById('startGameBtn').style.display = 'block';
+            } else {
+                // 조건이 맞지 않으면 시작 버튼 숨기기
+                document.getElementById('startGameBtn').style.display = 'none';
             }
             
             // 게스트: 대기 메시지 표시
             if (!isHost && myTeam) {
                 document.getElementById('guestWaitingMessage').style.display = 'block';
+            } else {
+                document.getElementById('guestWaitingMessage').style.display = 'none';
             }
         }
         
