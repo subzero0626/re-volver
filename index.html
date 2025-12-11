@@ -4408,47 +4408,7 @@
             
             // 멀티플레이어 연결 정리 (게임 종료 시 항상 정리)
             if (gameState.isMultiplayer || multiplayerPeer) {
-                // 멀티플레이어 게임 루프 정지
-                stopMultiplayerGameLoop();
-                
-                gameState.isMultiplayer = false;
-                gameStarted = false;
-                
-                // 상대방에게 연결 종료 알림 (연결이 열려있을 때만)
-                if (multiplayerConnection && multiplayerConnection.open) {
-                    try {
-                        sendMultiplayerData({ type: 'leave' });
-                    } catch (e) {
-                        console.log('연결 종료 알림 전송 실패:', e);
-                    }
-                }
-                
-                // 연결 정리
-                myTeam = null;
-                opponentTeam = null;
-                opponentReady = false;
-                opponentNickname = null;
-                
-                if (multiplayerConnection) {
-                    try {
-                        multiplayerConnection.close();
-                    } catch (e) {
-                        console.log('연결 종료 실패:', e);
-                    }
-                    multiplayerConnection = null;
-                }
-                
-                if (multiplayerPeer) {
-                    try {
-                        multiplayerPeer.destroy();
-                    } catch (e) {
-                        console.log('Peer 종료 실패:', e);
-                    }
-                    multiplayerPeer = null;
-                }
-                
-                currentRoomCode = null;
-                isHost = false;
+                cleanupMultiplayerConnection();
             }
             
             // 플레이어 색상 초기화
@@ -6612,19 +6572,8 @@
         }
 
         function createRoom() {
-            // 이전 연결이 있으면 정리
-            if (multiplayerPeer) {
-                try {
-                    if (multiplayerConnection && multiplayerConnection.open) {
-                        multiplayerConnection.close();
-                    }
-                    multiplayerPeer.destroy();
-                } catch (e) {
-                    console.log('이전 연결 정리 실패:', e);
-                }
-                multiplayerPeer = null;
-                multiplayerConnection = null;
-            }
+            // 이전 연결이 있으면 완전히 정리
+            cleanupMultiplayerConnection();
             
             // 상태 초기화
             myTeam = null;
@@ -6632,6 +6581,9 @@
             opponentReady = false;
             opponentNickname = null;
             gameStarted = false;
+            gameState.isMultiplayer = false;
+            isHost = false;
+            currentRoomCode = null;
             
             const modal = document.getElementById('roomModal');
             const title = document.getElementById('roomModalTitle');
@@ -6664,19 +6616,8 @@
         }
 
         function showJoinRoom() {
-            // 이전 연결이 있으면 정리
-            if (multiplayerPeer) {
-                try {
-                    if (multiplayerConnection && multiplayerConnection.open) {
-                        multiplayerConnection.close();
-                    }
-                    multiplayerPeer.destroy();
-                } catch (e) {
-                    console.log('이전 연결 정리 실패:', e);
-                }
-                multiplayerPeer = null;
-                multiplayerConnection = null;
-            }
+            // 이전 연결이 있으면 완전히 정리
+            cleanupMultiplayerConnection();
             
             // 상태 초기화
             myTeam = null;
@@ -6684,6 +6625,9 @@
             opponentReady = false;
             opponentNickname = null;
             gameStarted = false;
+            gameState.isMultiplayer = false;
+            isHost = false;
+            currentRoomCode = null;
             
             const modal = document.getElementById('roomModal');
             const title = document.getElementById('roomModalTitle');
@@ -6765,8 +6709,57 @@
             }
         }
 
+        // 멀티플레이어 연결 정리 함수
+        function cleanupMultiplayerConnection() {
+            // 멀티플레이어 게임 루프 정지
+            stopMultiplayerGameLoop();
+            
+            // 상대방에게 연결 종료 알림 (연결이 열려있을 때만)
+            if (multiplayerConnection && multiplayerConnection.open) {
+                try {
+                    sendMultiplayerData({ type: 'leave' });
+                } catch (e) {
+                    console.log('연결 종료 알림 전송 실패:', e);
+                }
+            }
+            
+            // 연결 정리
+            if (multiplayerConnection) {
+                try {
+                    if (multiplayerConnection.open) {
+                        multiplayerConnection.close();
+                    }
+                } catch (e) {
+                    console.log('연결 종료 실패:', e);
+                }
+                multiplayerConnection = null;
+            }
+            
+            if (multiplayerPeer) {
+                try {
+                    multiplayerPeer.destroy();
+                } catch (e) {
+                    console.log('Peer 종료 실패:', e);
+                }
+                multiplayerPeer = null;
+            }
+            
+            // 상태 초기화
+            gameState.isMultiplayer = false;
+            myTeam = null;
+            opponentTeam = null;
+            opponentReady = false;
+            opponentNickname = null;
+            currentRoomCode = null;
+            isHost = false;
+            gameStarted = false;
+        }
+        
         function initPeerConnection(roomCode) {
             const waitingMessage = document.getElementById('waitingMessage');
+            
+            // 이전 연결이 있으면 정리
+            cleanupMultiplayerConnection();
             
             // PeerJS 인스턴스 생성 (방 코드를 ID로 사용)
             const peerId = 'revolver-duel-' + roomCode;
@@ -6824,6 +6817,9 @@
         function connectToRoom(roomCode) {
             const errorMessage = document.getElementById('joinErrorMessage');
             const joinInput = document.getElementById('roomJoinInput');
+            
+            // 이전 연결이 있으면 정리
+            cleanupMultiplayerConnection();
             
             const peerId = 'revolver-duel-' + roomCode;
             
@@ -6970,21 +6966,8 @@
                 case 'leave':
                     // 상대방이 방을 나감 (메시지 보내지 않고 정리)
                     alert('상대방이 나갔습니다');
-                    // 연결 먼저 정리 (leave 메시지 중복 방지)
-                    if (multiplayerConnection) {
-                        multiplayerConnection.close();
-                        multiplayerConnection = null;
-                    }
+                    cleanupMultiplayerConnection();
                     closeRoomModal(true); // keepConnection=true로 해서 다시 leave 메시지 안 보냄
-                    // 추가 정리
-                    myTeam = null;
-                    opponentTeam = null;
-                    opponentReady = false;
-                    opponentNickname = null;
-                    if (multiplayerPeer) {
-                        multiplayerPeer.destroy();
-                        multiplayerPeer = null;
-                    }
                     currentRoomCode = null;
                     break;
                     
