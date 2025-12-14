@@ -6582,7 +6582,6 @@
             opponentNickname = null;
             gameStarted = false;
             gameState.isMultiplayer = false;
-            isHost = false;
             currentRoomCode = null;
             
             const modal = document.getElementById('roomModal');
@@ -6595,7 +6594,7 @@
             
             // 방 코드 생성
             currentRoomCode = generateRoomCode();
-            isHost = true;
+            isHost = true; // 호스트로 설정 (initPeerConnection 전에 설정)
             
             // UI 설정
             title.textContent = '방 생성';
@@ -6768,8 +6767,13 @@
         function initPeerConnection(roomCode) {
             const waitingMessage = document.getElementById('waitingMessage');
             
-            // 이전 연결이 있으면 정리
+            // 이전 연결이 있으면 정리 (isHost는 나중에 설정되므로 저장)
+            const wasHost = isHost;
             cleanupMultiplayerConnection();
+            // 호스트인 경우 isHost 복원
+            if (wasHost) {
+                isHost = true;
+            }
             
             // PeerJS 인스턴스 생성 (방 코드를 ID로 사용)
             const peerId = 'revolver-duel-' + roomCode;
@@ -6969,7 +6973,16 @@
                 case 'teamSelect':
                     // 상대방 팀 선택
                     opponentTeam = data.team;
+                    console.log('상대방 팀 선택 수신:', opponentTeam, '내 팀:', myTeam, '호스트:', isHost);
                     updateTeamUI();
+                    // 양쪽 모두 선택되었는지 다시 한번 확인하여 버튼 표시
+                    if (isHost && myTeam && opponentTeam) {
+                        const startGameBtn = document.getElementById('startGameBtn');
+                        if (startGameBtn) {
+                            startGameBtn.style.display = 'block';
+                            console.log('✅ 상대방 팀 선택 수신 후 시작 버튼 표시됨!');
+                        }
+                    }
                     break;
                     
                 case 'nickname':
@@ -7152,13 +7165,26 @@
             // 호스트: 양쪽 모두 팀 선택 완료하면 시작 버튼 표시
             const startGameBtn = document.getElementById('startGameBtn');
             if (startGameBtn) {
-                if (isHost && myTeam && opponentTeam) {
+                // 호스트이고 양쪽 모두 팀을 선택했는지 확인
+                const bothTeamsSelected = isHost && myTeam && opponentTeam;
+                console.log('updateTeamUI 호출됨:', { isHost, myTeam, opponentTeam, bothTeamsSelected });
+                
+                if (bothTeamsSelected) {
+                    // 양쪽 모두 팀 선택 완료 - 시작 버튼 표시
                     startGameBtn.style.display = 'block';
-                    console.log('시작 버튼 표시:', { isHost, myTeam, opponentTeam });
+                    console.log('✅ 시작 버튼 표시됨!');
                 } else {
                     // 조건이 맞지 않으면 시작 버튼 숨기기
                     startGameBtn.style.display = 'none';
-                    console.log('시작 버튼 숨김:', { isHost, myTeam, opponentTeam });
+                    if (isHost) {
+                        console.log('❌ 시작 버튼 숨김 - 조건 불일치:', {
+                            'isHost': isHost,
+                            'myTeam': myTeam,
+                            'opponentTeam': opponentTeam,
+                            'myTeam truthy': !!myTeam,
+                            'opponentTeam truthy': !!opponentTeam
+                        });
+                    }
                 }
             } else {
                 console.error('startGameBtn 요소를 찾을 수 없습니다!');
