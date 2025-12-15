@@ -1294,6 +1294,12 @@
                     // 메인 메뉴로 돌아갈 때
                     gameState.isMenu = true;
                     stopShopRefreshTimer(); // 상점 타이머 중지
+                    
+                    // 멀티플레이어 연결이 남아있으면 정리 (안전장치)
+                    if (multiplayerPeer || multiplayerConnection) {
+                        console.log('메인 메뉴로 돌아감: 남아있는 멀티플레이어 연결 정리');
+                        cleanupMultiplayerConnection();
+                    }
                 } else if (screenName === 'game') {
                     stopShopRefreshTimer(); // 상점 타이머 중지
                 }
@@ -1333,7 +1339,8 @@
             // 멀티플레이 상태
             isMultiplayer: false,
             multiplayerReady: false, // 양쪽 모두 준비됨
-            lastSyncTime: 0 // 마지막 동기화 시간
+            lastSyncTime: 0, // 마지막 동기화 시간
+            explosions: [] // 폭발 이펙트 배열
         };
 
         // 튜토리얼 상태
@@ -1497,9 +1504,16 @@
             reflectActive: false, // 반사 보호막 활성화 여부
             reflectCooldown: 0, // 반사 쿨타임
             reflectEndTime: 0, // 반사 종료 시간
-            hasGatling: false, // 게틀링
-            gatlingBullets: 0, // 게틀링 남은 발사 수
-            gatlingNextShot: 0, // 게틀링 다음 발사 시간
+            hasExplosiveBullet: false, // 폭발탄
+            hasReaper: false, // 사신
+            isInvisible: false, // 은신 상태
+            invisibilityEndTime: 0, // 은신 종료 시간
+            hasOvercharge: false, // 과충전
+            overchargeActive: false, // 과충전 활성화 여부
+            overchargeCooldown: 0, // 과충전 쿨타임
+            overchargeEndTime: 0, // 과충전 종료 시간
+            overchargeTrail: [], // 과충전 잔상 위치 배열
+            hasVictor: false, // 승리자
             hasTimeStop: false, // 시간정지
             timeStopCooldown: 0, // 시간정지 쿨타임
             timeStopActive: false, // 시간정지 활성화 여부
@@ -1747,7 +1761,7 @@
             { 
                 id: 'shotgun', 
                 name: '샷건', 
-                description: '모든 탄약을 ±20도 범위에서 한번에 발사', 
+                description: '모든 탄약을 ±25도 범위에서 한번에 발사', 
                 effect: (character) => { 
                     character.hasShotgun = true; 
                 } 
@@ -1936,15 +1950,6 @@
                 } 
             },
             { 
-                id: 'gatling', 
-                name: '게틀링', 
-                description: '공격 시 남은 탄약을 모두 사용해 그 갯수만큼 0.1초마다 마우스가 보고있는 방향으로 총알 발사 + 재장전 시간 +0.5초', 
-                effect: (character) => { 
-                    character.hasGatling = true;
-                    character.reloadTime += 500; // 재장전 시간 +0.5초
-                } 
-            },
-            { 
                 id: 'timeStop', 
                 name: '시간정지', 
                 description: '10초마다 우클릭으로 1초동안 시간을 정지시켜 상대의 총알은 그 상태에서 멈추고, 상대는 움직이지 못하게 할 수 있음', 
@@ -1998,6 +2003,39 @@
                     character.hasBoomerang = true;
                 } 
             },
+            { 
+                id: 'explosiveBullet', 
+                name: '폭발탄', 
+                description: '총알이 벽에 닿았을 때 100px 반경에 0.5 데미지', 
+                effect: (character) => { 
+                    character.hasExplosiveBullet = true;
+                } 
+            },
+            { 
+                id: 'reaper', 
+                name: '사신', 
+                description: '적에게 총알을 맞출 시 0.4초간 은신 + 이동속도 15%', 
+                effect: (character) => { 
+                    character.hasReaper = true;
+                } 
+            },
+            { 
+                id: 'overcharge', 
+                name: '과충전', 
+                description: '10초마다 우클릭으로 1.5초동안 이동속도 33% + 총알속도 +33%', 
+                effect: (character) => { 
+                    character.hasOvercharge = true;
+                    character.overchargeCooldown = 0;
+                } 
+            },
+            { 
+                id: 'victor', 
+                name: '승리자', 
+                description: '라운드가 시작할 때 10% 확률로 그 라운드 즉시 승리', 
+                effect: (character) => { 
+                    character.hasVictor = true;
+                } 
+            },
         ];
 
         // 키 입력 상태
@@ -2047,6 +2085,14 @@
                 player.timeStopActive = true;
                 player.timeStopEndTime = Date.now() + 1000; // 1초
             }
+            
+            // 과충전 활성화 (우클릭)
+            if (player.hasOvercharge && !player.overchargeActive && player.overchargeCooldown === 0) {
+                const now = Date.now();
+                player.overchargeActive = true;
+                player.overchargeEndTime = now + 1500; // 1.5초
+                player.overchargeCooldown = now + 10000; // 10초 쿨타임
+            }
         });
 
         // 총알 클래스
@@ -2059,7 +2105,11 @@
                 this.angle = angle;
                 this.createTime = Date.now(); // 생성 시간 저장 (10초 후 삭제용)
                 const baseSpeed = 20;
-                const speedMultiplier = owner.bulletSpeedMultiplier || 1;
+                let speedMultiplier = owner.bulletSpeedMultiplier || 1;
+                // 과충전: 활성화 중 총알 속도 +33%
+                if (owner.overchargeActive && Date.now() < owner.overchargeEndTime) {
+                    speedMultiplier *= 1.33;
+                }
                 this.speed = baseSpeed * speedMultiplier;
                 this.baseSpeed = this.speed; // 원래 속도 저장 (시간장막용)
                 // 환각: 날아가는 도중에 0.1초마다 속도 변경을 위한 변수
@@ -2307,16 +2357,6 @@
             if (character.ammo > 0 && !character.isReloading && 
                 now - character.lastShot > character.shootCooldown) {
                 
-                // 게틀링 증강: 남은 탄약 모두 사용, 0.1초마다 발사
-                if (character.hasGatling) {
-                    character.gatlingBullets = character.ammo;
-                    character.ammo = 0; // 모든 탄약 소모
-                    character.gatlingNextShot = now; // 첫 발사는 즉시
-                    character.lastShot = now; // 쿨타임 적용
-                    character.gatlingAngle = character.angle; // 발사 시작 시 방향 저장
-                    return; // 실제 발사는 게임 루프에서 처리
-                }
-                
                 // 비산탄 증강이 있을 때의 발사 처리
                 if (character.hasScatter) {
                     // 비산탄: ±4도 범위에서 2도 간격으로 4개로 나눔 + 데미지 0.25배
@@ -2335,8 +2375,8 @@
                         // 샷건 + 비산탄: 모든 탄약을 샷건으로 발사하되, 각 총알을 비산탄으로 분산
                         const currentAmmo = character.ammo;
                         for (let i = 0; i < currentAmmo; i++) {
-                            // ±20도 범위 내 랜덤 각도
-                            const randomAngle = (Math.random() - 0.5) * (Math.PI * 40 / 180); // -20도 ~ +20도
+                            // ±25도 범위 내 랜덤 각도
+                            const randomAngle = (Math.random() - 0.5) * (Math.PI * 50 / 180); // -25도 ~ +25도
                             const baseAngle = scatterBaseAngle + randomAngle;
                             
                             // 각 총알을 비산탄으로 분산
@@ -2381,7 +2421,7 @@
                         character.lastShot = now;
                     }
                 } else if (character.hasShotgun) {
-                // 샷건 증강: 모든 탄약을 ±20도 범위에서 한번에 발사
+                // 샷건 증강: 모든 탄약을 ±25도 범위에서 한번에 발사
                     // 도박 증강: 각 발사마다 랜덤 배율 적용
                     let shotgunGambleMultiplier = 1;
                     if (character.hasGamble) {
@@ -2390,8 +2430,8 @@
                     
                     const currentAmmo = character.ammo;
                     for (let i = 0; i < currentAmmo; i++) {
-                        // ±20도 범위 내 랜덤 각도
-                        let randomAngle = (Math.random() - 0.5) * (Math.PI * 40 / 180); // -20도 ~ +20도
+                        // ±25도 범위 내 랜덤 각도
+                        let randomAngle = (Math.random() - 0.5) * (Math.PI * 50 / 180); // -25도 ~ +25도
                         // 도박 증강: 각도에도 ±10도 추가
                         if (character.hasGamble) {
                             randomAngle += (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도 추가
@@ -2653,6 +2693,19 @@
                 player.isWeakened = false;
                 // 약화는 총알 생성 시에만 데미지를 감소시키므로, damage 자체는 변경하지 않음
             }
+            
+            // 사신 증강: 은신 종료 체크
+            if (player.isInvisible && now >= player.invisibilityEndTime) {
+                player.isInvisible = false;
+            }
+            
+            // 과충전: 종료 및 쿨타임 체크
+            if (player.overchargeActive && now >= player.overchargeEndTime) {
+                player.overchargeActive = false;
+            }
+            if (player.overchargeCooldown > 0 && now >= player.overchargeCooldown) {
+                player.overchargeCooldown = 0;
+            }
 
             // 기절 상태 체크
             if (player.isStunned && now >= player.stunEndTime) {
@@ -2764,6 +2817,26 @@
             if (now < player.slowEndTime) {
                     currentSpeed *= 0.75; // -25%
                 }
+            
+            // 사신 증강: 은신 중 이동속도 +15%
+            if (player.isInvisible && now < player.invisibilityEndTime) {
+                currentSpeed *= 1.15;
+            }
+            
+            // 과충전: 활성화 중 이동속도 +33%
+            if (player.overchargeActive && now < player.overchargeEndTime) {
+                currentSpeed *= 1.33;
+                // 과충전 잔상 추가 (파란색)
+                if (!player.overchargeTrail) player.overchargeTrail = [];
+                player.overchargeTrail.push({ x: player.x, y: player.y, alpha: 0.6 });
+                // 잔상이 너무 많아지면 제거
+                if (player.overchargeTrail.length > 8) {
+                    player.overchargeTrail.shift();
+                }
+            } else {
+                // 과충전 비활성화 시 잔상 초기화
+                if (player.overchargeTrail) player.overchargeTrail = [];
+            }
             
             // 회피기동: 재장전 중 이동속도 +75% (중첩)
             if (player.hasEvasiveManeuver && player.isReloading) {
@@ -2948,6 +3021,19 @@
                 enemy.isWeakened = false;
                 // 약화는 총알 생성 시에만 데미지를 감소시키므로, damage 자체는 변경하지 않음
             }
+            
+            // 사신 증강: 은신 종료 체크
+            if (enemy.isInvisible && now >= enemy.invisibilityEndTime) {
+                enemy.isInvisible = false;
+            }
+            
+            // 과충전: 종료 및 쿨타임 체크
+            if (enemy.overchargeActive && now >= enemy.overchargeEndTime) {
+                enemy.overchargeActive = false;
+            }
+            if (enemy.overchargeCooldown > 0 && now >= enemy.overchargeCooldown) {
+                enemy.overchargeCooldown = 0;
+            }
 
             // 기절 상태 체크
             if (enemy.isStunned && now >= enemy.stunEndTime) {
@@ -3005,6 +3091,26 @@
             if (now < enemy.slowEndTime) {
                     currentSpeed *= 0.75; // -25%
                 }
+            
+            // 사신 증강: 은신 중 이동속도 +15%
+            if (enemy.isInvisible && now < enemy.invisibilityEndTime) {
+                currentSpeed *= 1.15;
+            }
+            
+            // 과충전: 활성화 중 이동속도 +33%
+            if (enemy.overchargeActive && now < enemy.overchargeEndTime) {
+                currentSpeed *= 1.33;
+                // 과충전 잔상 추가 (파란색)
+                if (!enemy.overchargeTrail) enemy.overchargeTrail = [];
+                enemy.overchargeTrail.push({ x: enemy.x, y: enemy.y, alpha: 0.6 });
+                // 잔상이 너무 많아지면 제거
+                if (enemy.overchargeTrail.length > 8) {
+                    enemy.overchargeTrail.shift();
+                }
+            } else {
+                // 과충전 비활성화 시 잔상 초기화
+                if (enemy.overchargeTrail) enemy.overchargeTrail = [];
+            }
             
             // 회피기동: 재장전 중 이동속도 +75% (중첩)
             if (enemy.hasEvasiveManeuver && enemy.isReloading) {
@@ -3427,6 +3533,48 @@
                 
                 // 경계 체크 (멈춘 총알은 경계 체크 안 함, 부매랑 총알은 맵 밖으로 나가도 되돌아오므로 경계 체크 안 함)
                 if (!bullet.isStopped && !bullet.hasBoomerang && bullet.isOutOfBounds()) {
+                    // 폭발탄: 벽에 닿았을 때 폭발
+                    if (bullet.owner && bullet.owner.hasExplosiveBullet) {
+                        const explosionRadius = 125;
+                        const explosionDamage = 0.5;
+                        const explosionX = bullet.x;
+                        const explosionY = bullet.y;
+                        
+                        // 폭발 이펙트 추가
+                        if (!gameState.explosions) gameState.explosions = [];
+                        gameState.explosions.push({
+                            x: explosionX,
+                            y: explosionY,
+                            radius: explosionRadius,
+                            startTime: Date.now(),
+                            duration: 300
+                        });
+                        
+                        // 폭발 범위 내의 적에게 데미지
+                        const target = bullet.owner === player ? enemy : player;
+                        const dx = target.x - explosionX;
+                        const dy = target.y - explosionY;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance <= explosionRadius) {
+                            // 데미지 적용
+                            target.health = Math.max(0, target.health - explosionDamage);
+                            target.displayHealth = Math.max(0, target.displayHealth - explosionDamage);
+                            
+                            // 데미지 숫자 표시 (주황색)
+                            target.damageNumbers.push({
+                                value: explosionDamage,
+                                x: target.x,
+                                y: target.y - target.radius - 20,
+                                startTime: Date.now(),
+                                color: '#ff8800'
+                            });
+                            
+                            // 피격 이펙트
+                            addHitEffect(target, explosionX, explosionY);
+                        }
+                    }
+                    
                     character.bullets.splice(i, 1);
                     continue;
                 }
@@ -3555,6 +3703,17 @@
                     finalDamage = roundToMaxTwoDecimals(finalDamage);
                     target.health -= finalDamage;
                     target.health = roundToMaxTwoDecimals(target.health);
+                    
+                    // 사신 증강: 적에게 총알을 맞출 시 0.4초간 은신 + 이동속도 15%
+                    if (character.hasReaper && character === player) {
+                        const now = Date.now();
+                        player.isInvisible = true;
+                        player.invisibilityEndTime = now + 400; // 0.4초
+                    } else if (character.hasReaper && character === enemy) {
+                        const now = Date.now();
+                        enemy.isInvisible = true;
+                        enemy.invisibilityEndTime = now + 400; // 0.4초
+                    }
                     
                     // 피격 이펙트 생성 (플레이어가 적을 맞췄을 때)
                     if (character === player) {
@@ -4197,6 +4356,16 @@
 
         // 다음 라운드
         function nextRound() {
+            // 승리자 증강: 라운드 시작 시 10% 확률로 즉시 승리
+            if (player.hasVictor && Math.random() < 0.1) {
+                handleRoundEnd('player');
+                return;
+            }
+            if (enemy.hasVictor && Math.random() < 0.1) {
+                handleRoundEnd('enemy');
+                return;
+            }
+            
             // 멀티플레이어: 호스트가 다음 라운드 시작 알림
             if (gameState.isMultiplayer && isHost) {
                 sendMultiplayerData({ type: 'nextRound' });
@@ -4272,8 +4441,6 @@
             player.weakenEndTime = 0;
             player.lastRegenTime = Date.now(); // 재생 시작 시간
             // 새로운 증강 상태 초기화 (라운드 초기화)
-            player.gatlingBullets = 0;
-            player.gatlingNextShot = 0;
             player.reflectActive = false;
             player.reflectCooldown = 0;
             player.reflectEndTime = 0;
@@ -4326,8 +4493,6 @@
             enemy.weakenEndTime = 0;
             enemy.lastRegenTime = Date.now(); // 재생 시작 시간
             // 새로운 증강 상태 초기화 (라운드 초기화)
-            enemy.gatlingBullets = 0;
-            enemy.gatlingNextShot = 0;
             enemy.reflectActive = false;
             enemy.reflectCooldown = 0;
             enemy.reflectEndTime = 0;
@@ -4357,6 +4522,21 @@
             const modal = document.getElementById('gameOverModal');
             const title = document.getElementById('gameOverTitle');
             const message = document.getElementById('gameOverMessage');
+
+            // 멀티플레이어 게임 종료 시 연결 정리 (상대방에게 알림)
+            if (gameState.isMultiplayer) {
+                // 멀티플레이어 게임 루프 정지
+                stopMultiplayerGameLoop();
+                
+                // 상대방에게 게임 종료 알림 (연결이 열려있을 때만)
+                if (multiplayerConnection && multiplayerConnection.open) {
+                    try {
+                        sendMultiplayerData({ type: 'gameEnd', winner: winner });
+                    } catch (e) {
+                        console.log('게임 종료 알림 전송 실패:', e);
+                    }
+                }
+            }
 
             // 제화 지급 (게임 완전 종료 시)
             let killReward = 0;
@@ -4407,8 +4587,17 @@
             window.scrollTo(0, 0);
             
             // 멀티플레이어 연결 정리 (게임 종료 시 항상 정리)
-            if (gameState.isMultiplayer || multiplayerPeer) {
+            // 멀티플레이어 게임이었거나 Peer 인스턴스가 남아있으면 완전히 정리
+            if (gameState.isMultiplayer || multiplayerPeer || multiplayerConnection) {
+                console.log('게임 재시작: 멀티플레이어 연결 정리 중...');
                 cleanupMultiplayerConnection();
+                // 추가 정리: 약간의 지연 후 한 번 더 확인
+                setTimeout(() => {
+                    if (multiplayerPeer || multiplayerConnection) {
+                        console.log('추가 정리: 남아있는 연결 정리 중...');
+                        cleanupMultiplayerConnection();
+                    }
+                }, 100);
             }
             
             // 플레이어 색상 초기화
@@ -4555,9 +4744,16 @@
             enemy.hasTimeBarrier = false;
             enemy.timeBarrierRadius = 150;
             enemy.hasBouncyBullet = false;
-            enemy.hasGatling = false;
-            enemy.gatlingBullets = 0;
-            enemy.gatlingNextShot = 0;
+            enemy.hasExplosiveBullet = false;
+            enemy.hasReaper = false;
+            enemy.isInvisible = false;
+            enemy.invisibilityEndTime = 0;
+            enemy.hasOvercharge = false;
+            enemy.overchargeActive = false;
+            enemy.overchargeCooldown = 0;
+            enemy.overchargeEndTime = 0;
+            enemy.overchargeTrail = [];
+            enemy.hasVictor = false;
             enemy.hasReflect = false;
             enemy.reflectActive = false;
             enemy.reflectCooldown = 0;
@@ -4694,62 +4890,97 @@
             
             switch(augId) {
                 case 'health':
-                    // 체력: 하트 모양 (중앙 정렬, 조금 더 위로)
-                    ctx.fillStyle = '#ff006e';
+                    // 체력: 현대적인 하트 (그라데이션 효과)
+                    ctx.shadowBlur = 12;
                     ctx.shadowColor = '#ff006e';
+                    const healthGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.4);
+                    healthGradient.addColorStop(0, '#ff3399');
+                    healthGradient.addColorStop(1, '#ff006e');
+                    ctx.fillStyle = healthGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, size * -0.05);
-                    ctx.bezierCurveTo(0, -size * 0.35, -size * 0.4, -size * 0.35, -size * 0.4, size * -0.05);
-                    ctx.bezierCurveTo(-size * 0.4, size * 0.2, 0, size * 0.45, 0, size * 0.45);
-                    ctx.bezierCurveTo(0, size * 0.45, size * 0.4, size * 0.2, size * 0.4, size * -0.05);
-                    ctx.bezierCurveTo(size * 0.4, -size * 0.35, 0, -size * 0.35, 0, size * -0.05);
+                    ctx.moveTo(0, size * 0.1);
+                    ctx.bezierCurveTo(-size * 0.35, -size * 0.2, -size * 0.35, -size * 0.35, 0, -size * 0.2);
+                    ctx.bezierCurveTo(size * 0.35, -size * 0.35, size * 0.35, -size * 0.2, 0, size * 0.1);
+                    ctx.closePath();
                     ctx.fill();
                     break;
                 case 'speed':
-                    // 속도: 화살표
-                    ctx.fillStyle = '#00ff88';
+                    // 속도: 현대적인 이중 화살표 (위아래)
+                    ctx.shadowBlur = 10;
                     ctx.shadowColor = '#00ff88';
+                    ctx.fillStyle = '#00ff88';
+                    // 위쪽 화살표
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.3, 0);
-                    ctx.lineTo(size * 0.3, 0);
-                    ctx.lineTo(0, -size * 0.4);
+                    ctx.moveTo(0, -size * 0.35);
+                    ctx.lineTo(-size * 0.2, -size * 0.1);
+                    ctx.lineTo(-size * 0.1, -size * 0.1);
+                    ctx.lineTo(-size * 0.1, size * 0.05);
+                    ctx.lineTo(size * 0.1, size * 0.05);
+                    ctx.lineTo(size * 0.1, -size * 0.1);
+                    ctx.lineTo(size * 0.2, -size * 0.1);
                     ctx.closePath();
                     ctx.fill();
+                    // 아래쪽 화살표
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.3, 0);
-                    ctx.lineTo(0, size * 0.4);
-                    ctx.lineTo(size * 0.3, 0);
+                    ctx.moveTo(0, size * 0.35);
+                    ctx.lineTo(-size * 0.2, size * 0.1);
+                    ctx.lineTo(-size * 0.1, size * 0.1);
+                    ctx.lineTo(-size * 0.1, -size * 0.05);
+                    ctx.lineTo(size * 0.1, -size * 0.05);
+                    ctx.lineTo(size * 0.1, size * 0.1);
+                    ctx.lineTo(size * 0.2, size * 0.1);
                     ctx.closePath();
                     ctx.fill();
                     break;
                 case 'bulletSpeed':
-                    // 총알 속도: 번개
-                    ctx.fillStyle = '#ffaa00'; // 파스텔 오렌지
+                    // 총알 속도: 현대적인 번개 (그라데이션)
+                    ctx.shadowBlur = 12;
                     ctx.shadowColor = '#ffaa00';
+                    const bulletSpeedGradient = ctx.createLinearGradient(-size * 0.2, -size * 0.4, size * 0.2, size * 0.4);
+                    bulletSpeedGradient.addColorStop(0, '#ffcc44');
+                    bulletSpeedGradient.addColorStop(0.5, '#ffaa00');
+                    bulletSpeedGradient.addColorStop(1, '#ff8800');
+                    ctx.fillStyle = bulletSpeedGradient;
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.2, -size * 0.4);
-                    ctx.lineTo(size * 0.1, 0);
-                    ctx.lineTo(-size * 0.1, 0);
-                    ctx.lineTo(size * 0.2, size * 0.4);
+                    ctx.moveTo(-size * 0.15, -size * 0.4);
+                    ctx.lineTo(size * 0.08, -size * 0.15);
+                    ctx.lineTo(-size * 0.08, -size * 0.1);
+                    ctx.lineTo(size * 0.12, size * 0.15);
+                    ctx.lineTo(-size * 0.1, size * 0.35);
+                    ctx.lineTo(0, size * 0.15);
+                    ctx.lineTo(-size * 0.05, 0);
                     ctx.closePath();
                     ctx.fill();
                     break;
                 case 'ammo':
-                    // 탄약: 원
-                    ctx.fillStyle = '#ffffff'; // 파스텔 화이트
+                    // 탄약: 현대적인 총알 아이콘 (원 + 삼각형)
+                    ctx.shadowBlur = 10;
                     ctx.shadowColor = '#ffffff';
+                    ctx.fillStyle = '#ffffff';
+                    // 총알 본체 (원)
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                    // 총알 끝 (삼각형)
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.3, 0);
+                    ctx.lineTo(size * 0.45, -size * 0.15);
+                    ctx.lineTo(size * 0.45, size * 0.15);
+                    ctx.closePath();
                     ctx.fill();
                     break;
                 case 'fireRate':
-                    // 발사 속도: 별
-                    ctx.fillStyle = '#ff00ff'; // 파스텔 마젠타
+                    // 발사 속도: 현대적인 별 (그라데이션)
+                    ctx.shadowBlur = 12;
                     ctx.shadowColor = '#ff00ff';
+                    const fireRateGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.4);
+                    fireRateGradient.addColorStop(0, '#ff66ff');
+                    fireRateGradient.addColorStop(1, '#ff00ff');
+                    ctx.fillStyle = fireRateGradient;
                     ctx.beginPath();
                     for (let i = 0; i < 5; i++) {
                         const angle = (i * 4 * Math.PI / 5) - Math.PI / 2;
-                        const r = i % 2 === 0 ? size * 0.4 : size * 0.2;
+                        const r = i % 2 === 0 ? size * 0.4 : size * 0.18;
                         const x = Math.cos(angle) * r;
                         const y = Math.sin(angle) * r;
                         if (i === 0) ctx.moveTo(x, y);
@@ -4759,190 +4990,310 @@
                     ctx.fill();
                     break;
                 case 'reload':
-                    // 재장전: 시계
-                    ctx.strokeStyle = '#00ffff'; // 파스텔 시안
+                    // 재장전: 현대적인 시계 (원형 + 바늘)
+                    ctx.shadowBlur = 10;
                     ctx.shadowColor = '#00ffff';
-                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#00ffff';
+                    ctx.lineWidth = 2.5;
+                    ctx.lineCap = 'round';
+                    // 시계 외곽
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
                     ctx.stroke();
+                    // 시계 바늘 (분침)
                     ctx.beginPath();
                     ctx.moveTo(0, 0);
-                    ctx.lineTo(0, -size * 0.3);
+                    ctx.lineTo(0, -size * 0.28);
                     ctx.stroke();
+                    // 시계 바늘 (시침)
                     ctx.beginPath();
                     ctx.moveTo(0, 0);
-                    ctx.lineTo(size * 0.2, 0);
+                    ctx.lineTo(size * 0.18, size * 0.05);
                     ctx.stroke();
+                    // 중앙 점
+                    ctx.fillStyle = '#00ffff';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.06, 0, Math.PI * 2);
+                    ctx.fill();
                     break;
                 case 'critical':
-                    // 크리티컬: X 표시
-                    ctx.strokeStyle = '#ff0000'; // 파스텔 레드
+                    // 크리티컬: 현대적인 X 표시 (두꺼운 선)
+                    ctx.shadowBlur = 12;
                     ctx.shadowColor = '#ff0000';
-                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 4;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.3, -size * 0.3);
-                    ctx.lineTo(size * 0.3, size * 0.3);
-                    ctx.moveTo(size * 0.3, -size * 0.3);
-                    ctx.lineTo(-size * 0.3, size * 0.3);
+                    ctx.moveTo(-size * 0.32, -size * 0.32);
+                    ctx.lineTo(size * 0.32, size * 0.32);
+                    ctx.moveTo(size * 0.32, -size * 0.32);
+                    ctx.lineTo(-size * 0.32, size * 0.32);
                     ctx.stroke();
                     break;
                 case 'doubleShot':
-                    // 더블샷: 두 개의 원
-                    ctx.fillStyle = '#ffc107'; // 파스텔 옐로우
+                    // 더블샷: 현대적인 두 개의 총알 (원 + 삼각형)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#ffc107';
+                    ctx.fillStyle = '#ffc107';
+                    // 왼쪽 총알
                     ctx.beginPath();
-                    ctx.arc(-size * 0.2, 0, size * 0.25, 0, Math.PI * 2);
+                    ctx.arc(-size * 0.2, 0, size * 0.22, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.arc(size * 0.2, 0, size * 0.25, 0, Math.PI * 2);
+                    ctx.moveTo(-size * 0.02, 0);
+                    ctx.lineTo(-size * 0.12, -size * 0.12);
+                    ctx.lineTo(-size * 0.12, size * 0.12);
+                    ctx.closePath();
                     ctx.fill();
-                    break;
-                case 'dodge':
-                    // 구르기: 대시선
-                    ctx.strokeStyle = '#8888ff'; // 파스텔 블루
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([3, 3]);
+                    // 오른쪽 총알
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.4, 0);
-                    ctx.lineTo(size * 0.4, 0);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                    break;
-                case 'revive':
-                    // 부활: 십자가
-                    ctx.fillStyle = '#00ff88'; // 파스텔 그린
-                    ctx.fillRect(-size * 0.15, -size * 0.4, size * 0.3, size * 0.8);
-                    ctx.fillRect(-size * 0.4, -size * 0.15, size * 0.8, size * 0.3);
-                    break;
-                case 'deepWound':
-                    // 깊은 상처: 칼
-                    ctx.fillStyle = '#880000';
+                    ctx.arc(size * 0.2, 0, size * 0.22, 0, Math.PI * 2);
+                    ctx.fill();
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.4);
-                    ctx.lineTo(-size * 0.1, size * 0.2);
-                    ctx.lineTo(0, size * 0.3);
-                    ctx.lineTo(size * 0.1, size * 0.2);
+                    ctx.moveTo(size * 0.02, 0);
+                    ctx.lineTo(size * 0.12, -size * 0.12);
+                    ctx.lineTo(size * 0.12, size * 0.12);
                     ctx.closePath();
                     ctx.fill();
                     break;
+                case 'dodge':
+                    // 구르기: 현대적인 대시선 (화살표 포함)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#8888ff';
+                    ctx.strokeStyle = '#8888ff';
+                    ctx.fillStyle = '#8888ff';
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
+                    ctx.setLineDash([4, 4]);
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.35, 0);
+                    ctx.lineTo(size * 0.2, 0);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    // 화살표 머리
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.2, 0);
+                    ctx.lineTo(size * 0.35, -size * 0.12);
+                    ctx.lineTo(size * 0.35, size * 0.12);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 'revive':
+                    // 부활: 현대적인 십자가 (둥근 모서리)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#00ff88';
+                    ctx.fillStyle = '#00ff88';
+                    // 세로 막대
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.12, -size * 0.4, size * 0.24, size * 0.8, size * 0.05);
+                    ctx.fill();
+                    // 가로 막대
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.4, -size * 0.12, size * 0.8, size * 0.24, size * 0.05);
+                    ctx.fill();
+                    break;
+                case 'deepWound':
+                    // 깊은 상처: 현대적인 칼 (그라데이션)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#880000';
+                    const deepWoundGradient = ctx.createLinearGradient(0, -size * 0.4, 0, size * 0.3);
+                    deepWoundGradient.addColorStop(0, '#aa0000');
+                    deepWoundGradient.addColorStop(1, '#660000');
+                    ctx.fillStyle = deepWoundGradient;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.4);
+                    ctx.lineTo(-size * 0.12, size * 0.15);
+                    ctx.lineTo(0, size * 0.3);
+                    ctx.lineTo(size * 0.12, size * 0.15);
+                    ctx.closePath();
+                    ctx.fill();
+                    // 칼날 강조선
+                    ctx.strokeStyle = '#cc0000';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.4);
+                    ctx.lineTo(0, size * 0.25);
+                    ctx.stroke();
+                    break;
                 case 'giant':
-                    // 거대화: 큰 사각형
-                    ctx.fillStyle = '#8B4513';
-                    ctx.fillRect(-size * 0.4, -size * 0.4, size * 0.8, size * 0.8);
+                    // 거대화: 현대적인 큰 사각형 (그라데이션)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#8B4513';
+                    const giantGradient = ctx.createLinearGradient(-size * 0.4, -size * 0.4, size * 0.4, size * 0.4);
+                    giantGradient.addColorStop(0, '#A0522D');
+                    giantGradient.addColorStop(1, '#8B4513');
+                    ctx.fillStyle = giantGradient;
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.38, -size * 0.38, size * 0.76, size * 0.76, size * 0.08);
+                    ctx.fill();
                     // 내부 작은 사각형
-                    ctx.fillStyle = '#A0522D';
-                    ctx.fillRect(-size * 0.25, -size * 0.25, size * 0.5, size * 0.5);
+                    ctx.fillStyle = '#654321';
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.24, -size * 0.24, size * 0.48, size * 0.48, size * 0.05);
+                    ctx.fill();
                     break;
                 case 'sniper':
-                    // 저격수: 스코프
-                    ctx.strokeStyle = '#333333';
-                    ctx.lineWidth = 2;
+                    // 저격수: 현대적인 스코프 (원형 + 십자선)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#333333';
+                    ctx.strokeStyle = '#555555';
+                    ctx.lineWidth = 2.5;
                     // 외부 원
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
+                    ctx.stroke();
+                    // 내부 원
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.25, 0, Math.PI * 2);
                     ctx.stroke();
                     // 십자선
+                    ctx.strokeStyle = '#888888';
+                    ctx.lineWidth = 1.5;
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.4, 0);
-                    ctx.lineTo(size * 0.4, 0);
-                    ctx.moveTo(0, -size * 0.4);
-                    ctx.lineTo(0, size * 0.4);
+                    ctx.moveTo(-size * 0.38, 0);
+                    ctx.lineTo(size * 0.38, 0);
+                    ctx.moveTo(0, -size * 0.38);
+                    ctx.lineTo(0, size * 0.38);
                     ctx.stroke();
                     // 중앙 점
                     ctx.fillStyle = '#ff0000';
+                    ctx.shadowColor = '#ff0000';
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.1, 0, Math.PI * 2);
+                    ctx.arc(0, 0, size * 0.08, 0, Math.PI * 2);
                     ctx.fill();
                     break;
                 case 'oneShotOneKill':
-                    // 원샷원킬: 큰 총알
-                    ctx.fillStyle = '#ff0000';
+                    // 원샷원킬: 현대적인 큰 총알 (그라데이션 + X)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ff0000';
+                    const oskGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.35);
+                    oskGradient.addColorStop(0, '#ff4444');
+                    oskGradient.addColorStop(1, '#cc0000');
+                    ctx.fillStyle = oskGradient;
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.35, 0, Math.PI * 2);
+                    ctx.arc(0, 0, size * 0.33, 0, Math.PI * 2);
                     ctx.fill();
-                    // 중앙 X
+                    // 중앙 X (두꺼운 선)
                     ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.2, -size * 0.2);
-                    ctx.lineTo(size * 0.2, size * 0.2);
-                    ctx.moveTo(size * 0.2, -size * 0.2);
-                    ctx.lineTo(-size * 0.2, size * 0.2);
+                    ctx.moveTo(-size * 0.22, -size * 0.22);
+                    ctx.lineTo(size * 0.22, size * 0.22);
+                    ctx.moveTo(size * 0.22, -size * 0.22);
+                    ctx.lineTo(-size * 0.22, size * 0.22);
                     ctx.stroke();
                     break;
                 case 'poisonBullet':
-                    // 독 탄환: 독 방울
-                    ctx.fillStyle = '#006600';
+                    // 독 탄환: 현대적인 독 방울 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#00aa00';
+                    const poisonGradient = ctx.createRadialGradient(0, -size * 0.1, 0, 0, -size * 0.1, size * 0.3);
+                    poisonGradient.addColorStop(0, '#00cc00');
+                    poisonGradient.addColorStop(1, '#006600');
+                    ctx.fillStyle = poisonGradient;
+                    // 큰 방울
                     ctx.beginPath();
-                    ctx.arc(0, -size * 0.1, size * 0.3, 0, Math.PI * 2);
+                    ctx.arc(0, -size * 0.1, size * 0.28, 0, Math.PI * 2);
                     ctx.fill();
-                    // 작은 방울
+                    // 작은 방울들
+                    ctx.fillStyle = '#00aa00';
                     ctx.beginPath();
-                    ctx.arc(-size * 0.15, size * 0.15, size * 0.15, 0, Math.PI * 2);
+                    ctx.arc(-size * 0.18, size * 0.12, size * 0.14, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.arc(size * 0.15, size * 0.15, size * 0.15, 0, Math.PI * 2);
+                    ctx.arc(size * 0.18, size * 0.12, size * 0.14, 0, Math.PI * 2);
                     ctx.fill();
                     break;
                 case 'reloadHeal':
-                    // 재장전 회복: 하트 + 화살표
-                    ctx.fillStyle = '#ff006e';
+                    // 재장전 회복: 현대적인 하트 + 화살표
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ff006e';
+                    const reloadHealGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.3);
+                    reloadHealGradient.addColorStop(0, '#ff3399');
+                    reloadHealGradient.addColorStop(1, '#ff006e');
+                    ctx.fillStyle = reloadHealGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, size * 0.1);
-                    ctx.bezierCurveTo(0, -size * 0.1, -size * 0.3, -size * 0.1, -size * 0.3, size * 0.1);
-                    ctx.bezierCurveTo(-size * 0.3, size * 0.3, 0, size * 0.5, 0, size * 0.5);
-                    ctx.bezierCurveTo(0, size * 0.5, size * 0.3, size * 0.3, size * 0.3, size * 0.1);
-                    ctx.bezierCurveTo(size * 0.3, -size * 0.1, 0, -size * 0.1, 0, size * 0.1);
+                    ctx.moveTo(0, size * 0.12);
+                    ctx.bezierCurveTo(-size * 0.28, -size * 0.08, -size * 0.28, -size * 0.25, 0, -size * 0.08);
+                    ctx.bezierCurveTo(size * 0.28, -size * 0.25, size * 0.28, -size * 0.08, 0, size * 0.12);
+                    ctx.closePath();
                     ctx.fill();
-                    // 화살표
+                    // 화살표 (오른쪽)
+                    ctx.shadowColor = '#00ff00';
                     ctx.fillStyle = '#00ff00';
                     ctx.beginPath();
-                    ctx.moveTo(size * 0.2, 0);
-                    ctx.lineTo(0, -size * 0.2);
-                    ctx.lineTo(0, size * 0.2);
+                    ctx.moveTo(size * 0.25, 0);
+                    ctx.lineTo(size * 0.1, -size * 0.18);
+                    ctx.lineTo(size * 0.1, size * 0.18);
                     ctx.closePath();
                     ctx.fill();
                     break;
                 case 'bigBullet':
-                    // 큰 탄환: 큰 원
+                    // 큰 탄환: 현대적인 큰 총알 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ffffff';
+                    const bigBulletGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.4);
+                    bigBulletGradient.addColorStop(0, '#ffffff');
+                    bigBulletGradient.addColorStop(0.7, '#cccccc');
+                    bigBulletGradient.addColorStop(1, '#999999');
+                    ctx.fillStyle = bigBulletGradient;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
+                    ctx.fill();
+                    // 내부 작은 원 (하이라이트)
                     ctx.fillStyle = '#ffffff';
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
-                    ctx.fill();
-                    // 내부 작은 원
-                    ctx.fillStyle = '#888888';
-                    ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.25, 0, Math.PI * 2);
+                    ctx.arc(-size * 0.15, -size * 0.15, size * 0.12, 0, Math.PI * 2);
                     ctx.fill();
                     break;
                 case 'survivalInstinct':
-                    // 생존본능: 번개 + 하트
+                    // 생존본능: 현대적인 번개 + 하트
+                    ctx.shadowBlur = 12;
+                    // 번개
+                    ctx.shadowColor = '#ffaa00';
                     ctx.fillStyle = '#ffaa00';
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.2, -size * 0.3);
-                    ctx.lineTo(size * 0.1, 0);
-                    ctx.lineTo(-size * 0.1, 0);
-                    ctx.lineTo(size * 0.2, size * 0.3);
+                    ctx.moveTo(-size * 0.15, -size * 0.32);
+                    ctx.lineTo(size * 0.08, -size * 0.12);
+                    ctx.lineTo(-size * 0.08, -size * 0.08);
+                    ctx.lineTo(size * 0.15, size * 0.25);
+                    ctx.lineTo(-size * 0.1, size * 0.32);
+                    ctx.lineTo(0, size * 0.12);
+                    ctx.lineTo(-size * 0.05, 0);
                     ctx.closePath();
                     ctx.fill();
-                    ctx.fillStyle = '#ff006e';
+                    // 하트
+                    ctx.shadowColor = '#ff006e';
+                    const survivalHeartGradient = ctx.createRadialGradient(0, size * 0.15, 0, 0, size * 0.15, size * 0.25);
+                    survivalHeartGradient.addColorStop(0, '#ff3399');
+                    survivalHeartGradient.addColorStop(1, '#ff006e');
+                    ctx.fillStyle = survivalHeartGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, size * 0.1);
-                    ctx.bezierCurveTo(0, -size * 0.1, -size * 0.25, -size * 0.1, -size * 0.25, size * 0.1);
-                    ctx.bezierCurveTo(-size * 0.25, size * 0.3, 0, size * 0.5, 0, size * 0.5);
-                    ctx.bezierCurveTo(0, size * 0.5, size * 0.25, size * 0.3, size * 0.25, size * 0.1);
-                    ctx.bezierCurveTo(size * 0.25, -size * 0.1, 0, -size * 0.1, 0, size * 0.1);
+                    ctx.moveTo(0, size * 0.2);
+                    ctx.bezierCurveTo(-size * 0.22, -size * 0.08, -size * 0.22, -size * 0.2, 0, -size * 0.08);
+                    ctx.bezierCurveTo(size * 0.22, -size * 0.2, size * 0.22, -size * 0.08, 0, size * 0.2);
+                    ctx.closePath();
                     ctx.fill();
                     break;
                 case 'lastBullet':
-                    // 비장의 한발: 큰 총알 + 별
-                    ctx.fillStyle = '#ff0000';
-                    ctx.fillRect(-size * 0.3, -size * 0.15, size * 0.6, size * 0.3);
+                    // 비장의 한발: 현대적인 큰 총알 + 별
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ff0000';
+                    const lastBulletGradient = ctx.createLinearGradient(-size * 0.3, 0, size * 0.3, 0);
+                    lastBulletGradient.addColorStop(0, '#ff4444');
+                    lastBulletGradient.addColorStop(1, '#cc0000');
+                    ctx.fillStyle = lastBulletGradient;
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.28, -size * 0.14, size * 0.56, size * 0.28, size * 0.05);
+                    ctx.fill();
+                    // 별
+                    ctx.shadowColor = '#ffc107';
                     ctx.fillStyle = '#ffc107';
                     ctx.beginPath();
                     for (let i = 0; i < 5; i++) {
                         const angle = (i * 4 * Math.PI / 5) - Math.PI / 2;
-                        const r = i % 2 === 0 ? size * 0.2 : size * 0.1;
+                        const r = i % 2 === 0 ? size * 0.18 : size * 0.09;
                         const x = Math.cos(angle) * r;
                         const y = Math.sin(angle) * r;
                         if (i === 0) ctx.moveTo(x, y);
@@ -4952,254 +5303,389 @@
                     ctx.fill();
                     break;
                 case 'recoveryContract':
-                    // 회복계약: 하트 + 화살표 위
-                    ctx.fillStyle = '#00ff00';
+                    // 회복계약: 현대적인 하트 + 화살표 위
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#00ff00';
+                    const recoveryGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.3);
+                    recoveryGradient.addColorStop(0, '#44ff44');
+                    recoveryGradient.addColorStop(1, '#00aa00');
+                    ctx.fillStyle = recoveryGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, size * 0.1);
-                    ctx.bezierCurveTo(0, -size * 0.1, -size * 0.3, -size * 0.1, -size * 0.3, size * 0.1);
-                    ctx.bezierCurveTo(-size * 0.3, size * 0.3, 0, size * 0.5, 0, size * 0.5);
-                    ctx.bezierCurveTo(0, size * 0.5, size * 0.3, size * 0.3, size * 0.3, size * 0.1);
-                    ctx.bezierCurveTo(size * 0.3, -size * 0.1, 0, -size * 0.1, 0, size * 0.1);
+                    ctx.moveTo(0, size * 0.12);
+                    ctx.bezierCurveTo(-size * 0.28, -size * 0.08, -size * 0.28, -size * 0.25, 0, -size * 0.08);
+                    ctx.bezierCurveTo(size * 0.28, -size * 0.25, size * 0.28, -size * 0.08, 0, size * 0.12);
+                    ctx.closePath();
                     ctx.fill();
+                    // 화살표 위
+                    ctx.shadowColor = '#ffffff';
                     ctx.fillStyle = '#ffffff';
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.3);
-                    ctx.lineTo(-size * 0.15, -size * 0.1);
-                    ctx.lineTo(size * 0.15, -size * 0.1);
+                    ctx.moveTo(0, -size * 0.32);
+                    ctx.lineTo(-size * 0.18, -size * 0.12);
+                    ctx.lineTo(size * 0.18, -size * 0.12);
                     ctx.closePath();
                     ctx.fill();
                     break;
                 case 'focusedFire':
-                    // 집중 사격: 눈 모양
-                    ctx.fillStyle = '#ffff00';
+                    // 집중 사격: 현대적인 눈 모양 (그라데이션)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#ffff00';
+                    // 왼쪽 눈
+                    const leftEyeGradient = ctx.createRadialGradient(-size * 0.15, 0, 0, -size * 0.15, 0, size * 0.2);
+                    leftEyeGradient.addColorStop(0, '#ffff88');
+                    leftEyeGradient.addColorStop(1, '#ffff00');
+                    ctx.fillStyle = leftEyeGradient;
                     ctx.beginPath();
-                    ctx.arc(-size * 0.15, 0, size * 0.2, 0, Math.PI * 2);
+                    ctx.arc(-size * 0.15, 0, size * 0.18, 0, Math.PI * 2);
                     ctx.fill();
+                    // 오른쪽 눈
+                    const rightEyeGradient = ctx.createRadialGradient(size * 0.15, 0, 0, size * 0.15, 0, size * 0.2);
+                    rightEyeGradient.addColorStop(0, '#ffff88');
+                    rightEyeGradient.addColorStop(1, '#ffff00');
+                    ctx.fillStyle = rightEyeGradient;
                     ctx.beginPath();
-                    ctx.arc(size * 0.15, 0, size * 0.2, 0, Math.PI * 2);
+                    ctx.arc(size * 0.15, 0, size * 0.18, 0, Math.PI * 2);
                     ctx.fill();
+                    // 동공
                     ctx.fillStyle = '#000000';
                     ctx.beginPath();
-                    ctx.arc(-size * 0.15, 0, size * 0.1, 0, Math.PI * 2);
+                    ctx.arc(-size * 0.15, 0, size * 0.09, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.arc(size * 0.15, 0, size * 0.1, 0, Math.PI * 2);
+                    ctx.arc(size * 0.15, 0, size * 0.09, 0, Math.PI * 2);
                     ctx.fill();
                     break;
                 case 'ghost':
-                    // 유령: 반투명 원 + 작은 원들
-                    ctx.globalAlpha = 0.7;
-                    ctx.fillStyle = '#cccccc';
+                    // 유령: 현대적인 반투명 원 + 작은 원들 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#cccccc';
+                    ctx.globalAlpha = 0.75;
+                    const ghostGradient = ctx.createRadialGradient(0, -size * 0.1, 0, 0, -size * 0.1, size * 0.3);
+                    ghostGradient.addColorStop(0, '#eeeeee');
+                    ghostGradient.addColorStop(1, '#aaaaaa');
+                    ctx.fillStyle = ghostGradient;
                     ctx.beginPath();
-                    ctx.arc(0, -size * 0.1, size * 0.3, 0, Math.PI * 2);
+                    ctx.arc(0, -size * 0.1, size * 0.28, 0, Math.PI * 2);
                     ctx.fill();
                     // 작은 원들 (유령 느낌)
+                    ctx.fillStyle = '#cccccc';
                     ctx.beginPath();
-                    ctx.arc(-size * 0.15, size * 0.1, size * 0.15, 0, Math.PI * 2);
+                    ctx.arc(-size * 0.16, size * 0.12, size * 0.14, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.arc(size * 0.15, size * 0.1, size * 0.15, 0, Math.PI * 2);
+                    ctx.arc(size * 0.16, size * 0.12, size * 0.14, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.globalAlpha = 1.0;
                     break;
                 case 'fortify':
-                    // 거점확보: 방패 모양
-                    ctx.fillStyle = '#ffffff';
+                    // 거점확보: 현대적인 방패 모양 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ffffff';
+                    const fortifyGradient = ctx.createLinearGradient(0, -size * 0.4, 0, size * 0.3);
+                    fortifyGradient.addColorStop(0, '#ffffff');
+                    fortifyGradient.addColorStop(1, '#cccccc');
+                    ctx.fillStyle = fortifyGradient;
                     ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 2.5;
                     // 방패 본체
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.4);
-                    ctx.lineTo(-size * 0.3, -size * 0.2);
-                    ctx.lineTo(-size * 0.3, size * 0.2);
-                    ctx.lineTo(0, size * 0.3);
-                    ctx.lineTo(size * 0.3, size * 0.2);
-                    ctx.lineTo(size * 0.3, -size * 0.2);
+                    ctx.moveTo(0, -size * 0.38);
+                    ctx.lineTo(-size * 0.28, -size * 0.18);
+                    ctx.lineTo(-size * 0.28, size * 0.18);
+                    ctx.lineTo(0, size * 0.28);
+                    ctx.lineTo(size * 0.28, size * 0.18);
+                    ctx.lineTo(size * 0.28, -size * 0.18);
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
                     // 십자가
-                    ctx.strokeStyle = '#000000';
+                    ctx.strokeStyle = '#333333';
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
                     ctx.moveTo(0, -size * 0.2);
                     ctx.lineTo(0, size * 0.1);
-                    ctx.moveTo(-size * 0.15, -size * 0.05);
-                    ctx.lineTo(size * 0.15, -size * 0.05);
+                    ctx.moveTo(-size * 0.16, -size * 0.05);
+                    ctx.lineTo(size * 0.16, -size * 0.05);
                     ctx.stroke();
                     break;
                 case 'overheat':
-                    // 과열: 불꽃 모양
-                    ctx.fillStyle = '#ff6600';
+                    // 과열: 현대적인 불꽃 모양 (그라데이션)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ff6600';
+                    const overheatGradient = ctx.createLinearGradient(0, -size * 0.4, 0, size * 0.2);
+                    overheatGradient.addColorStop(0, '#ffaa00');
+                    overheatGradient.addColorStop(0.5, '#ff6600');
+                    overheatGradient.addColorStop(1, '#ff4400');
+                    ctx.fillStyle = overheatGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.4);
-                    ctx.lineTo(-size * 0.2, -size * 0.1);
-                    ctx.lineTo(-size * 0.15, size * 0.1);
-                    ctx.lineTo(0, size * 0.2);
-                    ctx.lineTo(size * 0.15, size * 0.1);
-                    ctx.lineTo(size * 0.2, -size * 0.1);
+                    ctx.moveTo(0, -size * 0.38);
+                    ctx.lineTo(-size * 0.18, -size * 0.08);
+                    ctx.lineTo(-size * 0.14, size * 0.12);
+                    ctx.lineTo(0, size * 0.18);
+                    ctx.lineTo(size * 0.14, size * 0.12);
+                    ctx.lineTo(size * 0.18, -size * 0.08);
                     ctx.closePath();
                     ctx.fill();
                     // 작은 불꽃들
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#ffaa00';
                     ctx.fillStyle = '#ffaa00';
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.1, -size * 0.2);
+                    ctx.moveTo(-size * 0.1, -size * 0.18);
                     ctx.lineTo(-size * 0.05, 0);
-                    ctx.lineTo(0, -size * 0.1);
+                    ctx.lineTo(0, -size * 0.08);
                     ctx.closePath();
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.moveTo(size * 0.1, -size * 0.2);
+                    ctx.moveTo(size * 0.1, -size * 0.18);
                     ctx.lineTo(size * 0.05, 0);
-                    ctx.lineTo(0, -size * 0.1);
+                    ctx.lineTo(0, -size * 0.08);
                     ctx.closePath();
                     ctx.fill();
                     break;
                 case 'gamble':
-                    // 도박: 주사위 모양
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(-size * 0.3, -size * 0.3, size * 0.6, size * 0.6);
-                    ctx.strokeStyle = '#000000';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(-size * 0.3, -size * 0.3, size * 0.6, size * 0.6);
-                    // 주사위 눈
+                    // 도박: 현대적인 주사위 (그라데이션 + 그림자)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#ffffff';
+                    const gambleGradient = ctx.createLinearGradient(-size * 0.3, -size * 0.3, size * 0.3, size * 0.3);
+                    gambleGradient.addColorStop(0, '#ffffff');
+                    gambleGradient.addColorStop(1, '#dddddd');
+                    ctx.fillStyle = gambleGradient;
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.28, -size * 0.28, size * 0.56, size * 0.56, size * 0.08);
+                    ctx.fill();
+                    ctx.strokeStyle = '#333333';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.28, -size * 0.28, size * 0.56, size * 0.56, size * 0.08);
+                    ctx.stroke();
+                    // 주사위 눈 (더 현대적으로)
                     ctx.fillStyle = '#000000';
                     ctx.beginPath();
-                    ctx.arc(-size * 0.15, -size * 0.15, size * 0.05, 0, Math.PI * 2);
+                    ctx.arc(-size * 0.16, -size * 0.16, size * 0.06, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.beginPath();
-                    ctx.arc(size * 0.15, size * 0.15, size * 0.05, 0, Math.PI * 2);
+                    ctx.arc(size * 0.16, size * 0.16, size * 0.06, 0, Math.PI * 2);
                     ctx.fill();
                     break;
                 case 'weaken':
-                    // 약화: 아래 화살표
-                    ctx.fillStyle = '#888888';
+                    // 약화: 현대적인 아래 화살표 (그라데이션)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#888888';
+                    const weakenGradient = ctx.createLinearGradient(0, -size * 0.3, 0, size * 0.1);
+                    weakenGradient.addColorStop(0, '#aaaaaa');
+                    weakenGradient.addColorStop(1, '#666666');
+                    ctx.fillStyle = weakenGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.3);
-                    ctx.lineTo(-size * 0.2, size * 0.1);
-                    ctx.lineTo(0, 0);
-                    ctx.lineTo(size * 0.2, size * 0.1);
+                    ctx.moveTo(0, -size * 0.28);
+                    ctx.lineTo(-size * 0.18, size * 0.08);
+                    ctx.lineTo(-size * 0.08, size * 0.08);
+                    ctx.lineTo(-size * 0.08, size * 0.15);
+                    ctx.lineTo(size * 0.08, size * 0.15);
+                    ctx.lineTo(size * 0.08, size * 0.08);
+                    ctx.lineTo(size * 0.18, size * 0.08);
                     ctx.closePath();
                     ctx.fill();
-                    // 감소 표시
+                    // 감소 표시 (빨간 선)
                     ctx.strokeStyle = '#ff0000';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.15, size * 0.2);
-                    ctx.lineTo(size * 0.15, size * 0.2);
+                    ctx.moveTo(-size * 0.16, size * 0.18);
+                    ctx.lineTo(size * 0.16, size * 0.18);
                     ctx.stroke();
                     break;
                 case 'damageBoost':
-                    // 데미지 1.2배: 위 화살표
-                    ctx.fillStyle = '#ff6600';
+                    // 데미지 1.2배: 현대적인 위 화살표 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ff6600';
+                    const damageBoostGradient = ctx.createLinearGradient(0, size * 0.3, 0, -size * 0.1);
+                    damageBoostGradient.addColorStop(0, '#ff8800');
+                    damageBoostGradient.addColorStop(1, '#ff4400');
+                    ctx.fillStyle = damageBoostGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, size * 0.3);
-                    ctx.lineTo(-size * 0.2, -size * 0.1);
-                    ctx.lineTo(0, 0);
-                    ctx.lineTo(size * 0.2, -size * 0.1);
+                    ctx.moveTo(0, size * 0.28);
+                    ctx.lineTo(-size * 0.18, -size * 0.08);
+                    ctx.lineTo(-size * 0.08, -size * 0.08);
+                    ctx.lineTo(-size * 0.08, -size * 0.15);
+                    ctx.lineTo(size * 0.08, -size * 0.15);
+                    ctx.lineTo(size * 0.08, -size * 0.08);
+                    ctx.lineTo(size * 0.18, -size * 0.08);
                     ctx.closePath();
                     ctx.fill();
-                    // 증가 표시
+                    // 증가 표시 (초록 선)
                     ctx.strokeStyle = '#00ff00';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.15, -size * 0.2);
-                    ctx.lineTo(size * 0.15, -size * 0.2);
+                    ctx.moveTo(-size * 0.16, -size * 0.18);
+                    ctx.lineTo(size * 0.16, -size * 0.18);
                     ctx.stroke();
                     break;
                 case 'lightning':
-                    // 번개: 번개 모양
-                    ctx.fillStyle = '#ffff00';
+                    // 번개: 현대적인 번개 (그라데이션)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ffff00';
+                    const lightningGradient = ctx.createLinearGradient(-size * 0.1, -size * 0.4, size * 0.15, size * 0.3);
+                    lightningGradient.addColorStop(0, '#ffff88');
+                    lightningGradient.addColorStop(0.5, '#ffff00');
+                    lightningGradient.addColorStop(1, '#ffaa00');
+                    ctx.fillStyle = lightningGradient;
                     ctx.strokeStyle = '#ffaa00';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 2.5;
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.1, -size * 0.4);
-                    ctx.lineTo(size * 0.1, -size * 0.2);
-                    ctx.lineTo(-size * 0.05, -size * 0.1);
-                    ctx.lineTo(size * 0.15, size * 0.2);
-                    ctx.lineTo(-size * 0.1, size * 0.3);
-                    ctx.lineTo(0, size * 0.1);
+                    ctx.moveTo(-size * 0.08, -size * 0.38);
+                    ctx.lineTo(size * 0.08, -size * 0.18);
+                    ctx.lineTo(-size * 0.05, -size * 0.08);
+                    ctx.lineTo(size * 0.14, size * 0.18);
+                    ctx.lineTo(-size * 0.1, size * 0.28);
+                    ctx.lineTo(0, size * 0.12);
                     ctx.lineTo(-size * 0.05, 0);
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
                     break;
                 case 'shield':
-                    // 방어막: 방패 모양
-                    ctx.fillStyle = '#0066ff';
+                    // 방어막: 현대적인 방패 모양 (그라데이션)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#0066ff';
+                    const shieldGradient = ctx.createLinearGradient(0, -size * 0.4, 0, size * 0.3);
+                    shieldGradient.addColorStop(0, '#3399ff');
+                    shieldGradient.addColorStop(1, '#0044cc');
+                    ctx.fillStyle = shieldGradient;
                     ctx.strokeStyle = '#0044cc';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 2.5;
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.4);
-                    ctx.lineTo(-size * 0.3, -size * 0.2);
-                    ctx.lineTo(-size * 0.3, size * 0.1);
-                    ctx.lineTo(0, size * 0.3);
-                    ctx.lineTo(size * 0.3, size * 0.1);
-                    ctx.lineTo(size * 0.3, -size * 0.2);
+                    ctx.moveTo(0, -size * 0.38);
+                    ctx.lineTo(-size * 0.28, -size * 0.18);
+                    ctx.lineTo(-size * 0.28, size * 0.12);
+                    ctx.lineTo(0, size * 0.28);
+                    ctx.lineTo(size * 0.28, size * 0.12);
+                    ctx.lineTo(size * 0.28, -size * 0.18);
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
+                    // 하이라이트
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.38);
+                    ctx.lineTo(-size * 0.14, -size * 0.18);
+                    ctx.lineTo(0, size * 0.05);
+                    ctx.lineTo(size * 0.14, -size * 0.18);
+                    ctx.closePath();
+                    ctx.fill();
                     break;
                 case 'regeneration':
-                    // 재생: 하트 + 플러스
-                    ctx.fillStyle = '#ff006e';
+                    // 재생: 현대적인 하트 + 플러스 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ff006e';
+                    const regenGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.25);
+                    regenGradient.addColorStop(0, '#ff3399');
+                    regenGradient.addColorStop(1, '#ff006e');
+                    ctx.fillStyle = regenGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, size * 0.1);
-                    ctx.bezierCurveTo(0, -size * 0.1, -size * 0.25, -size * 0.1, -size * 0.25, size * 0.1);
-                    ctx.bezierCurveTo(-size * 0.25, size * 0.3, 0, size * 0.5, 0, size * 0.5);
-                    ctx.bezierCurveTo(0, size * 0.5, size * 0.25, size * 0.3, size * 0.25, size * 0.1);
-                    ctx.bezierCurveTo(size * 0.25, -size * 0.1, 0, -size * 0.1, 0, size * 0.1);
+                    ctx.moveTo(0, size * 0.12);
+                    ctx.bezierCurveTo(-size * 0.24, -size * 0.08, -size * 0.24, -size * 0.25, 0, -size * 0.08);
+                    ctx.bezierCurveTo(size * 0.24, -size * 0.25, size * 0.24, -size * 0.08, 0, size * 0.12);
+                    ctx.closePath();
                     ctx.fill();
-                    // 플러스 표시
+                    // 플러스 표시 (둥근 모서리)
+                    ctx.shadowColor = '#ffffff';
                     ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(-size * 0.1, -size * 0.05, size * 0.2, size * 0.03);
-                    ctx.fillRect(-size * 0.05, -size * 0.1, size * 0.03, size * 0.2);
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.1, -size * 0.05, size * 0.2, size * 0.03, size * 0.01);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.05, -size * 0.1, size * 0.03, size * 0.2, size * 0.01);
+                    ctx.fill();
                     break;
                 case 'shotgun':
-                    // 샷건: 산탄총 모양
-                    ctx.fillStyle = '#8B4513';
-                    ctx.fillRect(-size * 0.4, -size * 0.1, size * 0.8, size * 0.2);
-                    ctx.fillStyle = '#654321';
-                    ctx.fillRect(-size * 0.35, -size * 0.05, size * 0.7, size * 0.1);
+                    // 샷건: 현대적인 산탄총 모양 (그라데이션)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#8B4513';
+                    const shotgunGradient = ctx.createLinearGradient(-size * 0.4, 0, size * 0.4, 0);
+                    shotgunGradient.addColorStop(0, '#A0522D');
+                    shotgunGradient.addColorStop(1, '#654321');
+                    ctx.fillStyle = shotgunGradient;
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.38, -size * 0.1, size * 0.76, size * 0.2, size * 0.03);
+                    ctx.fill();
+                    ctx.fillStyle = '#4a2c1a';
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.34, -size * 0.05, size * 0.68, size * 0.1, size * 0.02);
+                    ctx.fill();
+                    // 총구
+                    ctx.fillStyle = '#333333';
+                    ctx.beginPath();
+                    ctx.arc(size * 0.38, 0, size * 0.08, 0, Math.PI * 2);
+                    ctx.fill();
                     break;
                 case 'ragged':
-                    // 다다익선: 깨진 총알
-                    ctx.fillStyle = '#888888';
+                    // 다다익선: 현대적인 깨진 총알 (그라데이션)
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#888888';
+                    const raggedGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.3);
+                    raggedGradient.addColorStop(0, '#aaaaaa');
+                    raggedGradient.addColorStop(1, '#666666');
+                    ctx.fillStyle = raggedGradient;
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.3, 0, Math.PI * 2);
+                    ctx.arc(0, 0, size * 0.28, 0, Math.PI * 2);
                     ctx.fill();
+                    // 깨진 선 (X)
                     ctx.strokeStyle = '#ff0000';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.2, -size * 0.2);
-                    ctx.lineTo(size * 0.2, size * 0.2);
+                    ctx.moveTo(-size * 0.22, -size * 0.22);
+                    ctx.lineTo(size * 0.22, size * 0.22);
+                    ctx.moveTo(size * 0.22, -size * 0.22);
+                    ctx.lineTo(-size * 0.22, size * 0.22);
                     ctx.stroke();
                     break;
                 case 'evasiveManeuver':
-                    // 회피기동: 화살표 + 번개
-                    ctx.fillStyle = '#4a9eff';
+                    // 회피기동: 현대적인 화살표 + 번개
+                    ctx.shadowBlur = 12;
+                    // 화살표
+                    ctx.shadowColor = '#4a9eff';
+                    const evasiveGradient = ctx.createLinearGradient(0, -size * 0.3, 0, size * 0.1);
+                    evasiveGradient.addColorStop(0, '#66b3ff');
+                    evasiveGradient.addColorStop(1, '#3399ff');
+                    ctx.fillStyle = evasiveGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.3);
-                    ctx.lineTo(-size * 0.2, size * 0.1);
-                    ctx.lineTo(0, 0);
-                    ctx.lineTo(size * 0.2, size * 0.1);
+                    ctx.moveTo(0, -size * 0.28);
+                    ctx.lineTo(-size * 0.18, size * 0.08);
+                    ctx.lineTo(-size * 0.08, size * 0.08);
+                    ctx.lineTo(-size * 0.08, size * 0.15);
+                    ctx.lineTo(size * 0.08, size * 0.15);
+                    ctx.lineTo(size * 0.08, size * 0.08);
+                    ctx.lineTo(size * 0.18, size * 0.08);
                     ctx.closePath();
                     ctx.fill();
+                    // 번개 (X)
+                    ctx.shadowColor = '#ffff00';
                     ctx.strokeStyle = '#ffff00';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.1, -size * 0.1);
-                    ctx.lineTo(size * 0.1, size * 0.1);
-                    ctx.moveTo(size * 0.1, -size * 0.1);
-                    ctx.lineTo(-size * 0.1, size * 0.1);
+                    ctx.moveTo(-size * 0.12, -size * 0.12);
+                    ctx.lineTo(size * 0.12, size * 0.12);
+                    ctx.moveTo(size * 0.12, -size * 0.12);
+                    ctx.lineTo(-size * 0.12, size * 0.12);
                     ctx.stroke();
                     break;
                 case 'combatExperience':
-                    // 전투 경험: 별
-                    ctx.fillStyle = '#ffaa00';
+                    // 전투 경험: 현대적인 별 (그라데이션)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ffaa00';
+                    const combatGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.3);
+                    combatGradient.addColorStop(0, '#ffcc44');
+                    combatGradient.addColorStop(1, '#ff8800');
+                    ctx.fillStyle = combatGradient;
                     ctx.beginPath();
                     for (let i = 0; i < 5; i++) {
                         const angle = (i * 4 * Math.PI / 5) - Math.PI / 2;
-                        const r = i % 2 === 0 ? size * 0.3 : size * 0.15;
+                        const r = i % 2 === 0 ? size * 0.32 : size * 0.16;
                         const x = Math.cos(angle) * r;
                         const y = Math.sin(angle) * r;
                         if (i === 0) ctx.moveTo(x, y);
@@ -5209,138 +5695,301 @@
                     ctx.fill();
                     break;
                 case 'hallucination':
-                    // 환각: 물결 모양
+                    // 환각: 현대적인 물결 모양 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ff00ff';
                     ctx.strokeStyle = '#ff00ff';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    for (let i = -size * 0.4; i <= size * 0.4; i += 5) {
-                        const y = Math.sin(i * 0.2) * size * 0.2;
-                        if (i === -size * 0.4) ctx.moveTo(i, y);
+                    for (let i = -size * 0.38; i <= size * 0.38; i += 4) {
+                        const y = Math.sin(i * 0.25) * size * 0.22;
+                        if (i === -size * 0.38) ctx.moveTo(i, y);
                         else ctx.lineTo(i, y);
                     }
                     ctx.stroke();
+                    // 두 번째 물결
+                    ctx.globalAlpha = 0.6;
+                    ctx.beginPath();
+                    for (let i = -size * 0.38; i <= size * 0.38; i += 4) {
+                        const y = Math.sin(i * 0.25 + Math.PI) * size * 0.15;
+                        if (i === -size * 0.38) ctx.moveTo(i, y);
+                        else ctx.lineTo(i, y);
+                    }
+                    ctx.stroke();
+                    ctx.globalAlpha = 1.0;
                     break;
                 case 'tasteOfBlood':
-                    // 피의 맛: 빨간 하트
-                    ctx.fillStyle = '#ff0000';
+                    // 피의 맛: 현대적인 빨간 하트 (그라데이션)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ff0000';
+                    const bloodGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.25);
+                    bloodGradient.addColorStop(0, '#ff4444');
+                    bloodGradient.addColorStop(1, '#cc0000');
+                    ctx.fillStyle = bloodGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, size * 0.1);
-                    ctx.bezierCurveTo(0, -size * 0.1, -size * 0.25, -size * 0.1, -size * 0.25, size * 0.1);
-                    ctx.bezierCurveTo(-size * 0.25, size * 0.3, 0, size * 0.5, 0, size * 0.5);
-                    ctx.bezierCurveTo(0, size * 0.5, size * 0.25, size * 0.3, size * 0.25, size * 0.1);
-                    ctx.bezierCurveTo(size * 0.25, -size * 0.1, 0, -size * 0.1, 0, size * 0.1);
+                    ctx.moveTo(0, size * 0.12);
+                    ctx.bezierCurveTo(-size * 0.24, -size * 0.08, -size * 0.24, -size * 0.25, 0, -size * 0.08);
+                    ctx.bezierCurveTo(size * 0.24, -size * 0.25, size * 0.24, -size * 0.08, 0, size * 0.12);
+                    ctx.closePath();
+                    ctx.fill();
+                    // 하이라이트
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.08);
+                    ctx.bezierCurveTo(-size * 0.12, -size * 0.15, -size * 0.12, -size * 0.2, 0, -size * 0.08);
+                    ctx.bezierCurveTo(size * 0.12, -size * 0.2, size * 0.12, -size * 0.15, 0, -size * 0.08);
+                    ctx.closePath();
                     ctx.fill();
                     break;
                 case 'cannon':
-                    // 대포: 큰 원
-                    ctx.fillStyle = '#8B4513';
+                    // 대포: 현대적인 큰 원 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#8B4513';
+                    const cannonGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.4);
+                    cannonGradient.addColorStop(0, '#A0522D');
+                    cannonGradient.addColorStop(0.7, '#8B4513');
+                    cannonGradient.addColorStop(1, '#654321');
+                    ctx.fillStyle = cannonGradient;
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.strokeStyle = '#654321';
-                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = '#4a2c1a';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
                     ctx.stroke();
+                    // 내부 원 (구멍)
+                    ctx.fillStyle = '#000000';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.15, 0, Math.PI * 2);
+                    ctx.fill();
                     break;
                 case 'timeBarrier':
-                    // 시간장막: 원 + 시계
+                    // 시간장막: 현대적인 원 + 시계 (그라데이션)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#00ff00';
                     ctx.strokeStyle = '#00ff00';
-                    ctx.lineWidth = 2;
-                    ctx.globalAlpha = 0.5;
+                    ctx.lineWidth = 2.5;
+                    ctx.globalAlpha = 0.6;
+                    // 외부 원
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+                    ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
+                    ctx.stroke();
+                    // 내부 원
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.25, 0, Math.PI * 2);
                     ctx.stroke();
                     ctx.globalAlpha = 1.0;
                     // 시계 바늘
                     ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 1;
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
                     ctx.moveTo(0, 0);
-                    ctx.lineTo(0, -size * 0.2);
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(size * 0.15, size * 0.1);
+                    ctx.lineTo(0, -size * 0.22);
                     ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(size * 0.16, size * 0.08);
+                    ctx.stroke();
+                    // 중앙 점
+                    ctx.fillStyle = '#00ff00';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.05, 0, Math.PI * 2);
+                    ctx.fill();
                     break;
                 case 'bouncyBullet':
-                    // 통통탄: 튕기는 화살표
-                    ctx.fillStyle = '#ffaa00';
-                    ctx.beginPath();
+                    // 통통탄: 현대적인 튕기는 화살표 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ffaa00';
+                    const bouncyGradient = ctx.createLinearGradient(0, -size * 0.3, 0, size * 0.3);
+                    bouncyGradient.addColorStop(0, '#ffcc44');
+                    bouncyGradient.addColorStop(0.5, '#ffaa00');
+                    bouncyGradient.addColorStop(1, '#ff8800');
+                    ctx.fillStyle = bouncyGradient;
                     // 위쪽 화살표
-                    ctx.moveTo(0, -size * 0.3);
-                    ctx.lineTo(-size * 0.15, -size * 0.1);
-                    ctx.lineTo(0, 0);
-                    ctx.lineTo(size * 0.15, -size * 0.1);
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.28);
+                    ctx.lineTo(-size * 0.16, -size * 0.12);
+                    ctx.lineTo(-size * 0.08, -size * 0.12);
+                    ctx.lineTo(-size * 0.08, 0);
+                    ctx.lineTo(size * 0.08, 0);
+                    ctx.lineTo(size * 0.08, -size * 0.12);
+                    ctx.lineTo(size * 0.16, -size * 0.12);
                     ctx.closePath();
                     ctx.fill();
                     // 아래쪽 화살표 (반대 방향)
                     ctx.beginPath();
-                    ctx.moveTo(0, size * 0.3);
-                    ctx.lineTo(-size * 0.15, size * 0.1);
-                    ctx.lineTo(0, 0);
-                    ctx.lineTo(size * 0.15, size * 0.1);
+                    ctx.moveTo(0, size * 0.28);
+                    ctx.lineTo(-size * 0.16, size * 0.12);
+                    ctx.lineTo(-size * 0.08, size * 0.12);
+                    ctx.lineTo(-size * 0.08, 0);
+                    ctx.lineTo(size * 0.08, 0);
+                    ctx.lineTo(size * 0.08, size * 0.12);
+                    ctx.lineTo(size * 0.16, size * 0.12);
                     ctx.closePath();
                     ctx.fill();
                     break;
                 case 'gamble2':
-                    // 스네이크: 단순한 화살표 (방향 전환)
+                    // 스네이크: 현대적인 구불구불한 화살표 (방향 전환)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ffffff';
                     ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 3;
+                    ctx.lineWidth = 3.5;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    // 구불구불한 선
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.25, 0);
-                    ctx.lineTo(size * 0.25, 0);
-                    ctx.moveTo(size * 0.2, -size * 0.15);
-                    ctx.lineTo(size * 0.25, 0);
-                    ctx.lineTo(size * 0.2, size * 0.15);
+                    ctx.moveTo(-size * 0.3, -size * 0.1);
+                    ctx.quadraticCurveTo(-size * 0.1, 0, 0, size * 0.1);
+                    ctx.quadraticCurveTo(size * 0.1, 0, size * 0.3, -size * 0.1);
                     ctx.stroke();
+                    // 화살표 머리
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.3, -size * 0.1);
+                    ctx.lineTo(size * 0.35, -size * 0.18);
+                    ctx.lineTo(size * 0.32, -size * 0.12);
+                    ctx.lineTo(size * 0.38, -size * 0.12);
+                    ctx.lineTo(size * 0.38, -size * 0.05);
+                    ctx.lineTo(size * 0.32, -size * 0.05);
+                    ctx.closePath();
+                    ctx.fill();
                     break;
                 case 'reflect':
-                    // 반사: 방패 + 화살표 반사
-                    ctx.fillStyle = '#ffffff';
+                    // 반사: 현대적인 방패 + 화살표 반사 (그라데이션)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ffffff';
+                    const reflectGradient = ctx.createLinearGradient(0, -size * 0.4, 0, size * 0.3);
+                    reflectGradient.addColorStop(0, '#ffffff');
+                    reflectGradient.addColorStop(1, '#cccccc');
+                    ctx.fillStyle = reflectGradient;
                     ctx.strokeStyle = '#ffffff';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 2.5;
+                    // 방패 본체
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.4);
-                    ctx.lineTo(-size * 0.3, -size * 0.2);
-                    ctx.lineTo(-size * 0.3, size * 0.2);
-                    ctx.lineTo(0, size * 0.3);
-                    ctx.lineTo(size * 0.3, size * 0.2);
-                    ctx.lineTo(size * 0.3, -size * 0.2);
+                    ctx.moveTo(0, -size * 0.38);
+                    ctx.lineTo(-size * 0.28, -size * 0.18);
+                    ctx.lineTo(-size * 0.28, size * 0.18);
+                    ctx.lineTo(0, size * 0.28);
+                    ctx.lineTo(size * 0.28, size * 0.18);
+                    ctx.lineTo(size * 0.28, -size * 0.18);
                     ctx.closePath();
                     ctx.fill();
                     ctx.stroke();
-                    // 반사 화살표
+                    // 반사 화살표 (노란색)
+                    ctx.shadowColor = '#ffff00';
                     ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.2, 0);
+                    ctx.moveTo(-size * 0.22, 0);
                     ctx.lineTo(0, 0);
-                    ctx.lineTo(size * 0.2, 0);
-                    ctx.moveTo(size * 0.15, -size * 0.1);
-                    ctx.lineTo(size * 0.2, 0);
-                    ctx.lineTo(size * 0.15, size * 0.1);
+                    ctx.lineTo(size * 0.22, 0);
                     ctx.stroke();
+                    // 화살표 머리
+                    ctx.fillStyle = '#ffff00';
+                    ctx.beginPath();
+                    ctx.moveTo(size * 0.22, 0);
+                    ctx.lineTo(size * 0.32, -size * 0.12);
+                    ctx.lineTo(size * 0.32, size * 0.12);
+                    ctx.closePath();
+                    ctx.fill();
                     break;
-                case 'gatling':
-                    // 게틀링: 회전하는 총열
-                    ctx.fillStyle = '#666666';
-                    ctx.fillRect(-size * 0.4, -size * 0.2, size * 0.8, size * 0.4);
-                    ctx.fillStyle = '#000000';
-                    // 총열 구멍들
-                    for (let i = -2; i <= 2; i++) {
+                case 'explosiveBullet':
+                    // 폭발탄: 폭발 아이콘
+                    ctx.fillStyle = '#ff8800';
+                    ctx.shadowColor = '#ff8800';
+                    // 중심 원
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                    // 폭발선들
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (i * Math.PI * 2 / 8);
                         ctx.beginPath();
-                        ctx.arc(i * size * 0.15, 0, size * 0.05, 0, Math.PI * 2);
-                        ctx.fill();
+                        ctx.moveTo(Math.cos(angle) * size * 0.15, Math.sin(angle) * size * 0.15);
+                        ctx.lineTo(Math.cos(angle) * size * 0.35, Math.sin(angle) * size * 0.35);
+                        ctx.strokeStyle = '#ff8800';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
                     }
                     break;
+                case 'reaper':
+                    // 사신: 낫 모양
+                    ctx.strokeStyle = '#333333';
+                    ctx.shadowColor = '#333333';
+                    ctx.lineWidth = 3;
+                    // 낫 손잡이
+                    ctx.beginPath();
+                    ctx.moveTo(0, -size * 0.3);
+                    ctx.lineTo(0, size * 0.3);
+                    ctx.stroke();
+                    // 낫 날
+                    ctx.beginPath();
+                    ctx.arc(size * 0.1, -size * 0.2, size * 0.25, -Math.PI * 0.3, Math.PI * 0.7);
+                    ctx.stroke();
+                    break;
+                case 'overcharge':
+                    // 과충전: 번개 + 원
+                    ctx.fillStyle = '#ffff00';
+                    ctx.shadowColor = '#ffff00';
+                    // 번개
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.1, -size * 0.3);
+                    ctx.lineTo(size * 0.1, -size * 0.1);
+                    ctx.lineTo(-size * 0.05, -size * 0.05);
+                    ctx.lineTo(size * 0.15, size * 0.2);
+                    ctx.lineTo(-size * 0.1, size * 0.3);
+                    ctx.lineTo(0, size * 0.1);
+                    ctx.lineTo(-size * 0.05, 0);
+                    ctx.closePath();
+                    ctx.fill();
+                    // 원형 테두리
+                    ctx.strokeStyle = '#ffff00';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.35, 0, Math.PI * 2);
+                    ctx.stroke();
+                    break;
+                case 'victor':
+                    // 승리자: 왕관
+                    ctx.fillStyle = '#ffd700';
+                    ctx.shadowColor = '#ffd700';
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.3, size * 0.2);
+                    ctx.lineTo(-size * 0.2, -size * 0.1);
+                    ctx.lineTo(0, size * 0.1);
+                    ctx.lineTo(size * 0.2, -size * 0.1);
+                    ctx.lineTo(size * 0.3, size * 0.2);
+                    ctx.closePath();
+                    ctx.fill();
+                    // 보석
+                    ctx.fillStyle = '#ff0000';
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.08, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
                 case 'timeStop':
-                    // 시간정지: 회색 멈춤 아이콘 (pause icon)
-                    ctx.fillStyle = '#888888';
+                    // 시간정지: 현대적인 멈춤 아이콘 (pause icon, 그라데이션)
+                    ctx.shadowBlur = 15;
                     ctx.shadowColor = '#888888';
-                    // 두 개의 세로 막대 (pause icon)
-                    ctx.fillRect(-size * 0.15, -size * 0.2, size * 0.1, size * 0.4);
-                    ctx.fillRect(size * 0.05, -size * 0.2, size * 0.1, size * 0.4);
+                    const timeStopGradient = ctx.createLinearGradient(-size * 0.15, -size * 0.2, -size * 0.15, size * 0.2);
+                    timeStopGradient.addColorStop(0, '#aaaaaa');
+                    timeStopGradient.addColorStop(1, '#666666');
+                    ctx.fillStyle = timeStopGradient;
+                    // 두 개의 세로 막대 (pause icon, 둥근 모서리)
+                    ctx.beginPath();
+                    ctx.roundRect(-size * 0.15, -size * 0.2, size * 0.1, size * 0.4, size * 0.02);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.roundRect(size * 0.05, -size * 0.2, size * 0.1, size * 0.4, size * 0.02);
+                    ctx.fill();
                     break;
                 case 'scatter':
-                    // 비산탄: 4방향 화살표
-                    ctx.fillStyle = '#ffaa00';
+                    // 비산탄: 현대적인 4방향 화살표 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ffaa00';
                     for (let i = 0; i < 4; i++) {
                         const angle = (i * Math.PI * 2 / 4) - Math.PI / 2;
                         const x = Math.cos(angle) * size * 0.25;
@@ -5348,125 +5997,165 @@
                         ctx.save();
                         ctx.translate(x, y);
                         ctx.rotate(angle);
+                        const scatterGradient = ctx.createLinearGradient(0, -size * 0.15, 0, 0);
+                        scatterGradient.addColorStop(0, '#ffcc44');
+                        scatterGradient.addColorStop(1, '#ff8800');
+                        ctx.fillStyle = scatterGradient;
                         ctx.beginPath();
-                        ctx.moveTo(0, -size * 0.15);
-                        ctx.lineTo(-size * 0.08, -size * 0.05);
-                        ctx.lineTo(0, 0);
-                        ctx.lineTo(size * 0.08, -size * 0.05);
+                        ctx.moveTo(0, -size * 0.16);
+                        ctx.lineTo(-size * 0.08, -size * 0.06);
+                        ctx.lineTo(-size * 0.04, -size * 0.06);
+                        ctx.lineTo(-size * 0.04, 0);
+                        ctx.lineTo(size * 0.04, 0);
+                        ctx.lineTo(size * 0.04, -size * 0.06);
+                        ctx.lineTo(size * 0.08, -size * 0.06);
                         ctx.closePath();
                         ctx.fill();
                         ctx.restore();
                     }
                     break;
                 case 'rocket':
-                    // 로켓탄: 로켓 모양
-                    ctx.fillStyle = '#ff6600';
+                    // 로켓탄: 현대적인 로켓 모양 (그라데이션)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#ff6600';
+                    const rocketGradient = ctx.createLinearGradient(0, -size * 0.4, 0, size * 0.3);
+                    rocketGradient.addColorStop(0, '#ffaa00');
+                    rocketGradient.addColorStop(0.5, '#ff6600');
+                    rocketGradient.addColorStop(1, '#ff4400');
+                    ctx.fillStyle = rocketGradient;
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.4);
-                    ctx.lineTo(-size * 0.2, size * 0.2);
-                    ctx.lineTo(0, size * 0.3);
-                    ctx.lineTo(size * 0.2, size * 0.2);
+                    ctx.moveTo(0, -size * 0.38);
+                    ctx.lineTo(-size * 0.18, size * 0.18);
+                    ctx.lineTo(0, size * 0.28);
+                    ctx.lineTo(size * 0.18, size * 0.18);
                     ctx.closePath();
                     ctx.fill();
-                    // 불꽃
-                    ctx.fillStyle = '#ffff00';
+                    // 불꽃 (그라데이션)
+                    ctx.shadowColor = '#ffff00';
+                    const flameGradient = ctx.createLinearGradient(0, size * 0.3, 0, size * 0.4);
+                    flameGradient.addColorStop(0, '#ffff00');
+                    flameGradient.addColorStop(1, '#ff6600');
+                    ctx.fillStyle = flameGradient;
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.15, size * 0.3);
-                    ctx.lineTo(-size * 0.05, size * 0.4);
-                    ctx.lineTo(0, size * 0.35);
-                    ctx.lineTo(size * 0.05, size * 0.4);
-                    ctx.lineTo(size * 0.15, size * 0.3);
+                    ctx.moveTo(-size * 0.14, size * 0.28);
+                    ctx.lineTo(-size * 0.05, size * 0.38);
+                    ctx.lineTo(0, size * 0.33);
+                    ctx.lineTo(size * 0.05, size * 0.38);
+                    ctx.lineTo(size * 0.14, size * 0.28);
                     ctx.closePath();
                     ctx.fill();
                     break;
                 case 'trinity':
-                    // 삼위일체: 세 개의 원이 연결된 모양 (삼각형 배치)
-                    ctx.fillStyle = '#9b59b6'; // 보라색
+                    // 삼위일체: 현대적인 세 개의 원이 연결된 모양 (삼각형 배치, 그라데이션)
+                    ctx.shadowBlur = 15;
                     ctx.shadowColor = '#9b59b6';
+                    const trinityGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.2);
+                    trinityGradient.addColorStop(0, '#bb77dd');
+                    trinityGradient.addColorStop(1, '#7b39a6');
+                    ctx.fillStyle = trinityGradient;
                     // 위쪽 원
                     ctx.beginPath();
-                    ctx.arc(0, -size * 0.2, size * 0.15, 0, Math.PI * 2);
+                    ctx.arc(0, -size * 0.2, size * 0.16, 0, Math.PI * 2);
                     ctx.fill();
                     // 왼쪽 아래 원
                     ctx.beginPath();
-                    ctx.arc(-size * 0.2, size * 0.2, size * 0.15, 0, Math.PI * 2);
+                    ctx.arc(-size * 0.2, size * 0.2, size * 0.16, 0, Math.PI * 2);
                     ctx.fill();
                     // 오른쪽 아래 원
                     ctx.beginPath();
-                    ctx.arc(size * 0.2, size * 0.2, size * 0.15, 0, Math.PI * 2);
+                    ctx.arc(size * 0.2, size * 0.2, size * 0.16, 0, Math.PI * 2);
                     ctx.fill();
-                    // 연결선
+                    // 연결선 (더 두껍고 부드럽게)
                     ctx.strokeStyle = '#9b59b6';
-                    ctx.lineWidth = 2;
+                    ctx.lineWidth = 3;
+                    ctx.lineCap = 'round';
                     ctx.beginPath();
-                    ctx.moveTo(0, -size * 0.05);
-                    ctx.lineTo(-size * 0.2, size * 0.05);
-                    ctx.moveTo(0, -size * 0.05);
-                    ctx.lineTo(size * 0.2, size * 0.05);
-                    ctx.moveTo(-size * 0.2, size * 0.05);
-                    ctx.lineTo(size * 0.2, size * 0.05);
+                    ctx.moveTo(0, -size * 0.04);
+                    ctx.lineTo(-size * 0.2, size * 0.04);
+                    ctx.moveTo(0, -size * 0.04);
+                    ctx.lineTo(size * 0.2, size * 0.04);
+                    ctx.moveTo(-size * 0.2, size * 0.04);
+                    ctx.lineTo(size * 0.2, size * 0.04);
                     ctx.stroke();
                     break;
                 case 'judgment':
-                    // 선고: 충격파 모양 (원형 파동)
-                    ctx.strokeStyle = '#ff4444'; // 빨간색
+                    // 선고: 현대적인 충격파 모양 (원형 파동, 그라데이션)
+                    ctx.shadowBlur = 15;
                     ctx.shadowColor = '#ff4444';
-                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = '#ff4444';
+                    ctx.lineWidth = 3.5;
+                    ctx.lineCap = 'round';
                     // 바깥쪽 원
+                    ctx.globalAlpha = 0.8;
                     ctx.beginPath();
                     ctx.arc(0, 0, size * 0.35, 0, Math.PI * 2);
                     ctx.stroke();
                     // 중간 원
+                    ctx.globalAlpha = 0.9;
                     ctx.beginPath();
                     ctx.arc(0, 0, size * 0.25, 0, Math.PI * 2);
                     ctx.stroke();
                     // 안쪽 원
+                    ctx.globalAlpha = 1.0;
                     ctx.beginPath();
                     ctx.arc(0, 0, size * 0.15, 0, Math.PI * 2);
                     ctx.stroke();
-                    // 중앙 화살표 (밀어내는 방향)
-                    ctx.fillStyle = '#ff4444';
+                    ctx.globalAlpha = 1.0;
+                    // 중앙 화살표 (밀어내는 방향, 그라데이션)
+                    const judgmentGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.35);
+                    judgmentGradient.addColorStop(0, '#ff6666');
+                    judgmentGradient.addColorStop(1, '#cc0000');
+                    ctx.fillStyle = judgmentGradient;
                     ctx.beginPath();
                     ctx.moveTo(0, 0);
-                    ctx.lineTo(size * 0.2, -size * 0.15);
-                    ctx.lineTo(size * 0.15, -size * 0.1);
-                    ctx.lineTo(size * 0.25, -size * 0.1);
-                    ctx.lineTo(size * 0.25, -size * 0.2);
-                    ctx.lineTo(size * 0.35, 0);
-                    ctx.lineTo(size * 0.25, size * 0.2);
-                    ctx.lineTo(size * 0.25, size * 0.1);
-                    ctx.lineTo(size * 0.15, size * 0.1);
-                    ctx.lineTo(size * 0.2, size * 0.15);
+                    ctx.lineTo(size * 0.22, -size * 0.16);
+                    ctx.lineTo(size * 0.16, -size * 0.12);
+                    ctx.lineTo(size * 0.26, -size * 0.12);
+                    ctx.lineTo(size * 0.26, -size * 0.22);
+                    ctx.lineTo(size * 0.36, 0);
+                    ctx.lineTo(size * 0.26, size * 0.22);
+                    ctx.lineTo(size * 0.26, size * 0.12);
+                    ctx.lineTo(size * 0.16, size * 0.12);
+                    ctx.lineTo(size * 0.22, size * 0.16);
                     ctx.closePath();
                     ctx.fill();
                     break;
                 case 'boomerang':
-                    // 부매랑: 부메랑 모양 (곡선 화살표)
-                    ctx.strokeStyle = '#00aaff'; // 하늘색
+                    // 부매랑: 현대적인 부메랑 모양 (곡선 화살표, 그라데이션)
+                    ctx.shadowBlur = 15;
                     ctx.shadowColor = '#00aaff';
-                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = '#00aaff';
+                    ctx.lineWidth = 3.5;
                     ctx.lineCap = 'round';
-                    // 부메랑 본체 (곡선)
+                    ctx.lineJoin = 'round';
+                    // 부메랑 본체 (곡선, 더 두껍게)
                     ctx.beginPath();
-                    ctx.arc(0, 0, size * 0.3, -Math.PI * 0.3, Math.PI * 1.3);
+                    ctx.arc(0, 0, size * 0.32, -Math.PI * 0.3, Math.PI * 1.3);
                     ctx.stroke();
-                    // 화살표 머리 (되돌아오는 방향)
-                    ctx.fillStyle = '#00aaff';
+                    // 화살표 머리 (되돌아오는 방향, 그라데이션)
+                    const boomerangGradient = ctx.createLinearGradient(size * 0.25, -size * 0.15, size * 0.4, -size * 0.15);
+                    boomerangGradient.addColorStop(0, '#33ccff');
+                    boomerangGradient.addColorStop(1, '#0088cc');
+                    ctx.fillStyle = boomerangGradient;
                     ctx.beginPath();
-                    ctx.moveTo(size * 0.25, -size * 0.15);
-                    ctx.lineTo(size * 0.35, -size * 0.25);
-                    ctx.lineTo(size * 0.3, -size * 0.2);
-                    ctx.lineTo(size * 0.4, -size * 0.15);
-                    ctx.lineTo(size * 0.3, -size * 0.1);
+                    ctx.moveTo(size * 0.26, -size * 0.16);
+                    ctx.lineTo(size * 0.36, -size * 0.26);
+                    ctx.lineTo(size * 0.32, -size * 0.22);
+                    ctx.lineTo(size * 0.42, -size * 0.16);
+                    ctx.lineTo(size * 0.32, -size * 0.12);
                     ctx.closePath();
                     ctx.fill();
                     // 반대 방향 화살표 (돌아오는 방향)
+                    const boomerangGradient2 = ctx.createLinearGradient(-size * 0.25, size * 0.15, -size * 0.4, size * 0.15);
+                    boomerangGradient2.addColorStop(0, '#33ccff');
+                    boomerangGradient2.addColorStop(1, '#0088cc');
+                    ctx.fillStyle = boomerangGradient2;
                     ctx.beginPath();
-                    ctx.moveTo(-size * 0.25, size * 0.15);
-                    ctx.lineTo(-size * 0.35, size * 0.25);
-                    ctx.lineTo(-size * 0.3, size * 0.2);
-                    ctx.lineTo(-size * 0.4, size * 0.15);
-                    ctx.lineTo(-size * 0.3, size * 0.1);
+                    ctx.moveTo(-size * 0.26, size * 0.16);
+                    ctx.lineTo(-size * 0.36, size * 0.26);
+                    ctx.lineTo(-size * 0.32, size * 0.22);
+                    ctx.lineTo(-size * 0.42, size * 0.16);
+                    ctx.lineTo(-size * 0.32, size * 0.12);
                     ctx.closePath();
                     ctx.fill();
                     break;
@@ -6720,33 +7409,44 @@
 
         // 멀티플레이어 연결 정리 함수
         function cleanupMultiplayerConnection() {
+            console.log('멀티플레이어 연결 정리 시작...');
+            
             // 멀티플레이어 게임 루프 정지
             stopMultiplayerGameLoop();
             
             // 상대방에게 연결 종료 알림 (연결이 열려있을 때만)
-            if (multiplayerConnection && multiplayerConnection.open) {
-                try {
-                    sendMultiplayerData({ type: 'leave' });
-                } catch (e) {
-                    console.log('연결 종료 알림 전송 실패:', e);
-                }
-            }
-            
-            // 연결 정리
             if (multiplayerConnection) {
                 try {
                     if (multiplayerConnection.open) {
+                        sendMultiplayerData({ type: 'leave' });
                         multiplayerConnection.close();
                     }
                 } catch (e) {
-                    console.log('연결 종료 실패:', e);
+                    console.log('연결 종료 알림 전송 실패:', e);
+                }
+                // 이벤트 리스너 제거
+                try {
+                    if (multiplayerConnection.removeAllListeners) {
+                        multiplayerConnection.removeAllListeners();
+                    }
+                } catch (e) {
+                    console.log('연결 리스너 제거 실패:', e);
                 }
                 multiplayerConnection = null;
             }
             
             if (multiplayerPeer) {
                 try {
-                    multiplayerPeer.destroy();
+                    // PeerJS의 모든 이벤트 리스너 제거
+                    if (multiplayerPeer.removeAllListeners) {
+                        multiplayerPeer.removeAllListeners();
+                    }
+                    // Peer 인스턴스 완전히 정리
+                    if (multiplayerPeer.destroy) {
+                        multiplayerPeer.destroy();
+                    }
+                    // Peer 인스턴스가 완전히 정리될 때까지 대기
+                    // destroy()는 비동기적으로 작동할 수 있으므로 약간의 지연 후 null 설정
                 } catch (e) {
                     console.log('Peer 종료 실패:', e);
                 }
@@ -6762,6 +7462,8 @@
             currentRoomCode = null;
             isHost = false;
             gameStarted = false;
+            
+            console.log('멀티플레이어 연결 정리 완료');
         }
         
         function initPeerConnection(roomCode) {
@@ -6770,6 +7472,10 @@
             // 이전 연결이 있으면 정리 (isHost는 나중에 설정되므로 저장)
             const wasHost = isHost;
             cleanupMultiplayerConnection();
+            
+            // PeerJS가 완전히 정리될 때까지 약간의 지연 (필요한 경우)
+            // 하지만 일반적으로 cleanupMultiplayerConnection()이 즉시 처리되므로 바로 진행
+            
             // 호스트인 경우 isHost 복원
             if (wasHost) {
                 isHost = true;
@@ -6821,8 +7527,18 @@
                 
                 multiplayerPeer.on('error', (err) => {
                     console.error('PeerJS 에러:', err);
-                    waitingMessage.textContent = '연결 오류가 발생했습니다';
-                    waitingMessage.style.color = '#e94560';
+                    // 같은 ID를 사용하려고 할 때 발생하는 에러 처리
+                    if (err.type === 'peer-unavailable' || err.type === 'unavailable-id') {
+                        // 이전 인스턴스가 아직 정리 중일 수 있으므로 잠시 후 재시도
+                        setTimeout(() => {
+                            cleanupMultiplayerConnection();
+                            // 재시도
+                            initPeerConnection(roomCode);
+                        }, 1000);
+                    } else {
+                        waitingMessage.textContent = '연결 오류가 발생했습니다';
+                        waitingMessage.style.color = '#e94560';
+                    }
                 });
             } catch (e) {
                 console.error('PeerJS 초기화 실패:', e);
@@ -6838,6 +7554,7 @@
             // 이전 연결이 있으면 정리
             cleanupMultiplayerConnection();
             
+            // 호스트의 Peer ID (방 코드 기반)
             const peerId = 'revolver-duel-' + roomCode;
             
             try {
@@ -6902,8 +7619,18 @@
                 
                 multiplayerPeer.on('error', (err) => {
                     console.error('PeerJS 에러:', err);
-                    errorMessage.textContent = '연결 오류가 발생했습니다';
-                    errorMessage.style.display = 'block';
+                    // 연결 오류 처리
+                    if (err.type === 'peer-unavailable' || err.type === 'unavailable-id') {
+                        // 이전 인스턴스가 아직 정리 중일 수 있으므로 잠시 후 재시도
+                        setTimeout(() => {
+                            cleanupMultiplayerConnection();
+                            // 재시도
+                            connectToRoom(roomCode);
+                        }, 1000);
+                    } else {
+                        errorMessage.textContent = '연결 오류가 발생했습니다';
+                        errorMessage.style.display = 'block';
+                    }
                 });
             } catch (e) {
                 console.error('PeerJS 초기화 실패:', e);
@@ -6994,10 +7721,28 @@
                 
                 case 'leave':
                     // 상대방이 방을 나감 (메시지 보내지 않고 정리)
-                    alert('상대방이 나갔습니다');
+                    console.log('상대방이 방을 나갔습니다');
+                    // 게임 중이 아니면 알림 표시
+                    if (!gameStarted) {
+                        alert('상대방이 나갔습니다');
+                    }
+                    // 연결 완전히 정리
                     cleanupMultiplayerConnection();
                     closeRoomModal(true); // keepConnection=true로 해서 다시 leave 메시지 안 보냄
                     currentRoomCode = null;
+                    // UI 초기화
+                    document.getElementById('roomCodeSection').style.display = 'none';
+                    document.getElementById('roomJoinInput').style.display = 'none';
+                    document.getElementById('teamSelectUI').style.display = 'none';
+                    document.getElementById('startGameBtn').style.display = 'none';
+                    document.getElementById('guestWaitingMessage').style.display = 'none';
+                    break;
+                    
+                case 'gameEnd':
+                    // 상대방이 게임 종료 알림 (동기화)
+                    console.log('상대방 게임 종료:', data.winner);
+                    // 멀티플레이어 게임 루프 정지
+                    stopMultiplayerGameLoop();
                     break;
                     
                 case 'startGame':
@@ -7213,6 +7958,8 @@
         // 연결 끊김 확인
         function confirmDisconnect() {
             document.getElementById('disconnectModal').style.display = 'none';
+            // 연결 완전히 정리
+            cleanupMultiplayerConnection();
             restartGame();
         }
 
@@ -7220,6 +7967,9 @@
             // 연결 끊김 처리
             // 멀티플레이어 게임 루프 정지
             stopMultiplayerGameLoop();
+            
+            // 연결 완전히 정리
+            cleanupMultiplayerConnection();
             
             gameState.isMultiplayer = false;
             gameStarted = false;
@@ -7437,7 +8187,15 @@
             char.hasGamble2 = false;
             char.hasReflect = false;
             char.reflectActive = false;
-            char.hasGatling = false;
+            char.hasExplosiveBullet = false;
+            char.hasReaper = false;
+            char.isInvisible = false;
+            char.invisibilityEndTime = 0;
+            char.hasOvercharge = false;
+            char.overchargeActive = false;
+            char.overchargeCooldown = 0;
+            char.overchargeEndTime = 0;
+            char.hasVictor = false;
             char.hasTimeStop = false;
             char.timeStopActive = false;
             char.hasScatter = false;
@@ -7699,9 +8457,15 @@
             player.hasTimeBarrier = false;
             player.timeBarrierRadius = 150;
             player.hasBouncyBullet = false;
-            player.hasGatling = false;
-            player.gatlingBullets = 0;
-            player.gatlingNextShot = 0;
+            player.hasExplosiveBullet = false;
+            player.hasReaper = false;
+            player.isInvisible = false;
+            player.invisibilityEndTime = 0;
+            player.hasOvercharge = false;
+            player.overchargeActive = false;
+            player.overchargeCooldown = 0;
+            player.overchargeEndTime = 0;
+            player.hasVictor = false;
             player.hasReflect = false;
             player.reflectActive = false;
             player.reflectCooldown = 0;
@@ -8094,6 +8858,36 @@
                 ctx.restore();
             }
             
+            // 폭발 이펙트 그리기
+            if (gameState.explosions && gameState.explosions.length > 0) {
+                const now = Date.now();
+                for (let i = gameState.explosions.length - 1; i >= 0; i--) {
+                    const explosion = gameState.explosions[i];
+                    const elapsed = now - explosion.startTime;
+                    const progress = Math.min(1, elapsed / explosion.duration);
+                    
+                    // 폭발 원 테두리 (주황색)
+                    ctx.strokeStyle = '#ff8800';
+                    ctx.lineWidth = 3;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#ff8800';
+                    ctx.beginPath();
+                    ctx.arc(explosion.x, explosion.y, explosion.radius * progress, 0, Math.PI * 2);
+                    ctx.stroke();
+                    
+                    // 폭발 중심 (페이드 아웃)
+                    ctx.fillStyle = `rgba(255, 136, 0, ${1 - progress})`;
+                    ctx.beginPath();
+                    ctx.arc(explosion.x, explosion.y, explosion.radius * 0.3 * (1 - progress), 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    if (progress >= 1) {
+                        gameState.explosions.splice(i, 1);
+                    }
+                }
+                ctx.shadowBlur = 0;
+            }
+            
             player.bullets.forEach(bullet => bullet.draw());
             enemy.bullets.forEach(bullet => bullet.draw());
 
@@ -8112,6 +8906,24 @@
                     ctx.globalAlpha = 1.0;
                 }
             }
+            
+            // 과충전 잔상 그리기 (파란색)
+            function drawOverchargeTrail(character) {
+                if (character.overchargeActive && character.overchargeTrail && character.overchargeTrail.length > 0) {
+                    character.overchargeTrail.forEach((trail, index) => {
+                        const fadeAlpha = trail.alpha * (1 - index * 0.15); // 점진적으로 투명
+                        ctx.globalAlpha = Math.max(0, fadeAlpha);
+                        ctx.fillStyle = '#4a9eff'; // 파란색
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = '#4a9eff';
+                        ctx.beginPath();
+                        ctx.arc(trail.x + shakeX, trail.y + shakeY, character.radius * 0.9, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                    ctx.globalAlpha = 1.0;
+                    ctx.shadowBlur = 0;
+                }
+            }
 
             // 클래식 모드 또는 랜덤 모드에서 네온 효과 추가 (맵 경계에 잘리지 않도록 흔들림 변환 전에 그리기)
             const isClassicOrRandom = gameState.gameMode === 'classic' || gameState.gameMode === 'random';
@@ -8120,22 +8932,37 @@
             if (isClassicOrRandom) {
                 // 적 네온 효과
                 if (enemy.x > -500 && enemy.y > -500) {
-                    ctx.save();
-                    ctx.shadowBlur = 20;
-                    ctx.shadowColor = enemy.color;
-                    ctx.globalAlpha = 0.6; // 네온 효과는 약간 투명하게
-                    ctx.beginPath();
-                    ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
-                    ctx.fillStyle = enemy.color;
-                    ctx.fill();
-                    ctx.restore();
+                    // 사신 증강: 멀티플레이어에서 적이 은신 중이면 플레이어에게는 아예 보이지 않음
+                    if (gameState.isMultiplayer && enemy.isInvisible && Date.now() < enemy.invisibilityEndTime) {
+                        // 멀티플레이어에서는 상대방이 은신 중이면 아예 그리지 않음
+                    } else {
+                        ctx.save();
+                        ctx.shadowBlur = 20;
+                        ctx.shadowColor = enemy.color;
+                        // 사신 증강: 싱글플레이어에서 적이 은신 중이면 50% 투명
+                        if (enemy.isInvisible && Date.now() < enemy.invisibilityEndTime) {
+                            ctx.globalAlpha = 0.5; // 싱글플레이어에서는 50% 투명
+                        } else {
+                            ctx.globalAlpha = 0.6; // 네온 효과는 약간 투명하게
+                        }
+                        ctx.beginPath();
+                        ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+                        ctx.fillStyle = enemy.color;
+                        ctx.fill();
+                        ctx.restore();
+                    }
                 }
                 
                 // 플레이어 네온 효과
                 ctx.save();
                 ctx.shadowBlur = 20;
                 ctx.shadowColor = player.color;
-                ctx.globalAlpha = 0.6; // 네온 효과는 약간 투명하게
+                // 사신 증강: 은신 중이면 상대방에게는 보이지 않음 (자신은 50% 투명)
+                if (player.isInvisible && Date.now() < player.invisibilityEndTime) {
+                    ctx.globalAlpha = 0.5; // 자신은 50% 투명
+                } else {
+                    ctx.globalAlpha = 0.6; // 네온 효과는 약간 투명하게
+                }
                 ctx.beginPath();
                 ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
                 ctx.fillStyle = player.color;
@@ -8145,20 +8972,28 @@
 
             // 적 그리기
             if (enemy.x > -500 && enemy.y > -500) {
-                ctx.save();
-                ctx.translate(enemy.x, enemy.y);
-                ctx.rotate(enemy.angle);
-                
-                // 기본 alpha 설정
-                ctx.globalAlpha = 1.0;
-                
-                // 무적 상태면 깜빡임 효과
-                if (enemy.isInvincible) {
-                    const blink = Math.floor(Date.now() / 100) % 2;
-                    if (blink) {
+                // 사신 증강: 멀티플레이어에서 적이 은신 중이면 플레이어에게는 아예 보이지 않음
+                if (gameState.isMultiplayer && enemy.isInvisible && Date.now() < enemy.invisibilityEndTime) {
+                    // 멀티플레이어에서는 상대방이 은신 중이면 아예 그리지 않음
+                } else {
+                    drawOverchargeTrail(enemy);
+                    ctx.save();
+                    ctx.translate(enemy.x, enemy.y);
+                    ctx.rotate(enemy.angle);
+                    
+                    // 기본 alpha 설정
+                    ctx.globalAlpha = 1.0;
+                    
+                    // 무적 상태면 깜빡임 효과
+                    if (enemy.isInvincible) {
+                        const blink = Math.floor(Date.now() / 100) % 2;
+                        if (blink) {
+                            ctx.globalAlpha = 0.5;
+                        }
+                    } else if (enemy.isInvisible && Date.now() < enemy.invisibilityEndTime) {
+                        // 사신 증강: 싱글플레이어에서 적이 은신 중이면 50% 투명
                         ctx.globalAlpha = 0.5;
                     }
-                }
                 
                 // 구르기 잔상 그리기
                 if (enemy.dodgeTrail && enemy.dodgeTrail.length > 0) {
@@ -8200,14 +9035,15 @@
                 ctx.fillRect(enemy.radius - 7.5, -4.5, 22.5, 9); // 1.5배 증가
                 ctx.restore();
                 
-                ctx.globalAlpha = 1.0; // 복원
-                ctx.restore();
-                
-                // 적 체력과 탄환수는 UI 영역에서 표시됨
-                
-                // 적 재장전 바 표시 (적 바로 오른쪽 위) - 적 위치에 흔들림 적용
-                if (enemy.isReloading) {
-                    drawReloadBar(enemy, enemy.x + 40 + shakeX, enemy.y - 40 + shakeY);
+                    ctx.globalAlpha = 1.0; // 복원
+                    ctx.restore();
+                    
+                    // 적 체력과 탄환수는 UI 영역에서 표시됨
+                    
+                    // 적 재장전 바 표시 (적 바로 오른쪽 위) - 적 위치에 흔들림 적용
+                    if (enemy.isReloading) {
+                        drawReloadBar(enemy, enemy.x + 40 + shakeX, enemy.y - 40 + shakeY);
+                    }
                 }
             }
             
@@ -8222,10 +9058,13 @@
                 ctx.fillStyle = player.color;
                 ctx.fillText(playerNickname || '나', player.x + shakeX, player.y - player.radius - 10 + shakeY);
                 
-                // 상대방 닉네임
+                // 상대방 닉네임 (은신 중이면 표시하지 않음)
                 if (enemy.x > -500 && enemy.y > -500) {
-                    ctx.fillStyle = enemy.color;
-                    ctx.fillText(opponentNickname || '상대', enemy.x + shakeX, enemy.y - enemy.radius - 10 + shakeY);
+                    // 사신 증강: 멀티플레이어에서 적이 은신 중이면 닉네임도 표시하지 않음
+                    if (!(enemy.isInvisible && Date.now() < enemy.invisibilityEndTime)) {
+                        ctx.fillStyle = enemy.color;
+                        ctx.fillText(opponentNickname || '상대', enemy.x + shakeX, enemy.y - enemy.radius - 10 + shakeY);
+                    }
                 }
                 
                 ctx.restore();
@@ -8243,20 +9082,24 @@
                 ctx.restore();
             }
             
-            // 시간장막 그리기 (적)
+            // 시간장막 그리기 (적) - 은신 중이면 표시하지 않음
             if (enemy.hasTimeBarrier && enemy.x > -500 && enemy.y > -500) {
-                ctx.save();
-                ctx.globalAlpha = 0.2; // 투명도가 강한 초록색
-                ctx.strokeStyle = '#00ff00';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(enemy.x + shakeX, enemy.y + shakeY, enemy.timeBarrierRadius, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.restore();
+                // 사신 증강: 멀티플레이어에서 적이 은신 중이면 시간장막도 표시하지 않음
+                if (!(gameState.isMultiplayer && enemy.isInvisible && Date.now() < enemy.invisibilityEndTime)) {
+                    ctx.save();
+                    ctx.globalAlpha = 0.2; // 투명도가 강한 초록색
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(enemy.x + shakeX, enemy.y + shakeY, enemy.timeBarrierRadius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                }
             }
 
             // 플레이어 그리기
             drawDodgeTrail(player);
+            drawOverchargeTrail(player);
             ctx.save();
             ctx.translate(player.x, player.y);
             ctx.rotate(player.angle);
@@ -8268,6 +9111,9 @@
             } else if (player.hasGhost) {
                 // 유령 증강: 살짝 흐려지게
                 ctx.globalAlpha = 0.7;
+            } else if (player.isInvisible && Date.now() < player.invisibilityEndTime) {
+                // 사신 증강: 은신 중이면 50% 투명
+                ctx.globalAlpha = 0.5;
             }
             
             ctx.fillStyle = player.color;
@@ -8940,117 +9786,6 @@
                     }
                 }
 
-                // 게틀링 발사 처리
-                if (player.hasGatling && player.gatlingBullets > 0 && now >= player.gatlingNextShot) {
-                    // 도박 증강: 각 발사마다 랜덤 배율 적용
-                    let gatlingGambleMultiplier = 1;
-                    // 저장된 게틀링 각도 사용 (발사 시작 시 방향 고정)
-                    let gatlingBaseAngle = player.gatlingAngle || player.angle;
-                    if (player.hasGamble) {
-                        const randomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
-                        gatlingBaseAngle = (player.gatlingAngle || player.angle) + randomAngle;
-                        gatlingGambleMultiplier = 1 + Math.random(); // 1~2배
-                    }
-                    
-                    if (player.hasScatter) {
-                        // 게틀링 + 비산탄: 각 발사를 비산탄으로 분산
-                        const scatterAngles = [-4, -2, 0, 2];
-                        scatterAngles.forEach(angleDeg => {
-                            const angle = gatlingBaseAngle + (angleDeg * Math.PI / 180);
-                            const bullet = new Bullet(
-                                player.x + Math.cos(player.gatlingAngle || player.angle) * player.radius,
-                                player.y + Math.sin(player.gatlingAngle || player.angle) * player.radius,
-                                angle,
-                                player,
-                                false
-                            );
-                            // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
-                            if (player.hasGamble) {
-                                bullet.damage = Math.round(bullet.damage * gatlingGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
-                            }
-                            bullet.damage = bullet.damage * 0.25; // 데미지 0.25배
-                            player.bullets.push(bullet);
-                        });
-                    } else {
-                        const bullet = new Bullet(
-                            player.x + Math.cos(player.gatlingAngle || player.angle) * player.radius,
-                            player.y + Math.sin(player.gatlingAngle || player.angle) * player.radius,
-                            gatlingBaseAngle,
-                            player,
-                            false
-                        );
-                        // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
-                        if (player.hasGamble) {
-                            bullet.damage = Math.round(bullet.damage * gatlingGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
-                        }
-                        player.bullets.push(bullet);
-                    }
-                    player.gatlingBullets--;
-                    player.gatlingNextShot = now + 100; // 0.1초마다
-                    
-                    // 멀티플레이어: 게틀링 총알 전송
-                    if (gameState.isMultiplayer && player.bullets.length > 0) {
-                        const newBullets = player.bullets.slice(-10);
-                        sendShootData(newBullets);
-                    }
-                    
-                    // 게틀링 발사가 끝나면 자동 재장전
-                    if (player.gatlingBullets === 0 && !player.isReloading) {
-                        reload(player);
-                    }
-                }
-                if (enemy.hasGatling && enemy.gatlingBullets > 0 && now >= enemy.gatlingNextShot) {
-                    // 도박 증강: 각 발사마다 랜덤 배율 적용
-                    let gatlingGambleMultiplier = 1;
-                    // 저장된 게틀링 각도 사용 (발사 시작 시 방향 고정)
-                    let gatlingBaseAngle = enemy.gatlingAngle || enemy.angle;
-                    if (enemy.hasGamble) {
-                        const randomAngle = (Math.random() - 0.5) * (Math.PI * 20 / 180); // ±10도
-                        gatlingBaseAngle = (enemy.gatlingAngle || enemy.angle) + randomAngle;
-                        gatlingGambleMultiplier = 1 + Math.random(); // 1~2배
-                    }
-                    
-                    if (enemy.hasScatter) {
-                        // 게틀링 + 비산탄: 각 발사를 비산탄으로 분산
-                        const scatterAngles = [-4, -2, 0, 2];
-                        scatterAngles.forEach(angleDeg => {
-                            const angle = gatlingBaseAngle + (angleDeg * Math.PI / 180);
-                            const bullet = new Bullet(
-                                enemy.x + Math.cos(enemy.gatlingAngle || enemy.angle) * enemy.radius,
-                                enemy.y + Math.sin(enemy.gatlingAngle || enemy.angle) * enemy.radius,
-                                angle,
-                                enemy,
-                                false
-                            );
-                            // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
-                            if (enemy.hasGamble) {
-                                bullet.damage = Math.round(bullet.damage * gatlingGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
-                            }
-                            bullet.damage = bullet.damage * 0.25; // 데미지 0.25배
-                            enemy.bullets.push(bullet);
-                        });
-                    } else {
-                        const bullet = new Bullet(
-                            enemy.x + Math.cos(enemy.gatlingAngle || enemy.angle) * enemy.radius,
-                            enemy.y + Math.sin(enemy.gatlingAngle || enemy.angle) * enemy.radius,
-                            gatlingBaseAngle,
-                            enemy,
-                            false
-                        );
-                        // 도박 증강: 데미지 랜덤 적용 (다른 데미지 감소 효과를 고려하여 곱셈 적용)
-                        if (enemy.hasGamble) {
-                            bullet.damage = Math.round(bullet.damage * gatlingGambleMultiplier * 10) / 10; // 소수점 1자리까지만 반올림
-                        }
-                        enemy.bullets.push(bullet);
-                    }
-                    enemy.gatlingBullets--;
-                    enemy.gatlingNextShot = now + 100; // 0.1초마다
-                    
-                    // 게틀링 발사가 끝나면 자동 재장전
-                    if (enemy.gatlingBullets === 0 && !enemy.isReloading) {
-                        reload(enemy);
-                    }
-                }
 
                 updatePlayer(deltaTime);
                 
@@ -9215,34 +9950,6 @@
                     }
                 }
 
-                // 게틀링 발사 처리
-                if (player.hasGatling && player.gatlingBullets > 0 && now >= player.gatlingNextShot) {
-                    let gatlingGambleMultiplier = 1;
-                    if (player.hasGamble) {
-                        gatlingGambleMultiplier = 0.5 + Math.random() * 1.5;
-                    }
-                    shoot(player, false, gatlingGambleMultiplier);
-                    player.gatlingBullets--;
-                    player.gatlingNextShot = now + 100;
-                    
-                    if (player.gatlingBullets === 0 && !player.isReloading) {
-                        reload(player);
-                    }
-                }
-                
-                if (enemy.hasGatling && enemy.gatlingBullets > 0 && now >= enemy.gatlingNextShot) {
-                    let gatlingGambleMultiplier = 1;
-                    if (enemy.hasGamble) {
-                        gatlingGambleMultiplier = 0.5 + Math.random() * 1.5;
-                    }
-                    shoot(enemy, false, gatlingGambleMultiplier);
-                    enemy.gatlingBullets--;
-                    enemy.gatlingNextShot = now + 100;
-                    
-                    if (enemy.gatlingBullets === 0 && !enemy.isReloading) {
-                        reload(enemy);
-                    }
-                }
 
                 updatePlayer(deltaTime);
                 
