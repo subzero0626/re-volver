@@ -7562,6 +7562,18 @@
                 return;
             }
             
+            // 이전 연결이 있으면 완전히 정리
+            cleanupMultiplayerConnection();
+            
+            // 상태 초기화
+            myTeam = null;
+            opponentTeam = null;
+            opponentReady = false;
+            opponentNickname = null;
+            gameStarted = false;
+            gameState.isMultiplayer = false;
+            isHost = false;
+            
             currentRoomCode = code;
             errorMessage.style.display = 'none';
             
@@ -7653,6 +7665,7 @@
             // 상태 초기화
             gameState.isMultiplayer = false;
             gameState.obstacles = []; // 장애물 초기화
+            gameState.isNextRoundProcessing = false; // 라운드 처리 플래그 초기화
             myTeam = null;
             opponentTeam = null;
             opponentReady = false;
@@ -7671,19 +7684,18 @@
             const wasHost = isHost;
             cleanupMultiplayerConnection();
             
-            // PeerJS가 완전히 정리될 때까지 약간의 지연 (필요한 경우)
-            // 하지만 일반적으로 cleanupMultiplayerConnection()이 즉시 처리되므로 바로 진행
-            
-            // 호스트인 경우 isHost 복원
-            if (wasHost) {
-                isHost = true;
-            }
-            
-            // PeerJS 인스턴스 생성 (방 코드를 ID로 사용)
-            const peerId = 'revolver-duel-' + roomCode;
-            
-            try {
-                multiplayerPeer = new Peer(peerId);
+            // PeerJS가 완전히 정리될 때까지 약간의 지연
+            setTimeout(() => {
+                // 호스트인 경우 isHost 복원
+                if (wasHost) {
+                    isHost = true;
+                }
+                
+                // PeerJS 인스턴스 생성 (방 코드를 ID로 사용)
+                const peerId = 'revolver-duel-' + roomCode;
+                
+                try {
+                    multiplayerPeer = new Peer(peerId);
                 
                 multiplayerPeer.on('open', (id) => {
                     console.log('PeerJS 연결됨, ID:', id);
@@ -7723,26 +7735,27 @@
                     });
                 });
                 
-                multiplayerPeer.on('error', (err) => {
-                    console.error('PeerJS 에러:', err);
-                    // 같은 ID를 사용하려고 할 때 발생하는 에러 처리
-                    if (err.type === 'peer-unavailable' || err.type === 'unavailable-id') {
-                        // 이전 인스턴스가 아직 정리 중일 수 있으므로 잠시 후 재시도
-                        setTimeout(() => {
-                            cleanupMultiplayerConnection();
-                            // 재시도
-                            initPeerConnection(roomCode);
-                        }, 1000);
-                    } else {
-                        waitingMessage.textContent = '연결 오류가 발생했습니다';
-                        waitingMessage.style.color = '#e94560';
-                    }
-                });
-            } catch (e) {
-                console.error('PeerJS 초기화 실패:', e);
-                waitingMessage.textContent = 'PeerJS 로드 실패. 페이지를 새로고침 해주세요.';
-                waitingMessage.style.color = '#e94560';
-            }
+                    multiplayerPeer.on('error', (err) => {
+                        console.error('PeerJS 에러:', err);
+                        // 같은 ID를 사용하려고 할 때 발생하는 에러 처리
+                        if (err.type === 'peer-unavailable' || err.type === 'unavailable-id') {
+                            // 이전 인스턴스가 아직 정리 중일 수 있으므로 잠시 후 재시도
+                            setTimeout(() => {
+                                cleanupMultiplayerConnection();
+                                // 재시도
+                                initPeerConnection(roomCode);
+                            }, 1000);
+                        } else {
+                            waitingMessage.textContent = '연결 오류가 발생했습니다';
+                            waitingMessage.style.color = '#e94560';
+                        }
+                    });
+                } catch (e) {
+                    console.error('PeerJS 초기화 실패:', e);
+                    waitingMessage.textContent = 'PeerJS 로드 실패. 페이지를 새로고침 해주세요.';
+                    waitingMessage.style.color = '#e94560';
+                }
+            }, 200); // 200ms 지연으로 PeerJS 정리 시간 확보
         }
 
         function connectToRoom(roomCode) {
@@ -7752,13 +7765,15 @@
             // 이전 연결이 있으면 정리
             cleanupMultiplayerConnection();
             
-            // 호스트의 Peer ID (방 코드 기반)
-            const peerId = 'revolver-duel-' + roomCode;
-            
-            try {
-                // 새 Peer 인스턴스 생성 (고유 ID로)
-                const myId = 'revolver-duel-guest-' + Math.random().toString(36).substr(2, 9);
-                multiplayerPeer = new Peer(myId);
+            // PeerJS가 완전히 정리될 때까지 약간의 지연
+            setTimeout(() => {
+                // 호스트의 Peer ID (방 코드 기반)
+                const peerId = 'revolver-duel-' + roomCode;
+                
+                try {
+                    // 새 Peer 인스턴스 생성 (고유 ID로)
+                    const myId = 'revolver-duel-guest-' + Math.random().toString(36).substr(2, 9);
+                    multiplayerPeer = new Peer(myId);
                 
                 multiplayerPeer.on('open', () => {
                     console.log('PeerJS 연결됨, 방에 접속 시도...');
@@ -7830,11 +7845,12 @@
                         errorMessage.style.display = 'block';
                     }
                 });
-            } catch (e) {
-                console.error('PeerJS 초기화 실패:', e);
-                errorMessage.textContent = 'PeerJS 로드 실패';
-                errorMessage.style.display = 'block';
-            }
+                } catch (e) {
+                    console.error('PeerJS 초기화 실패:', e);
+                    errorMessage.textContent = 'PeerJS 로드 실패';
+                    errorMessage.style.display = 'block';
+                }
+            }, 200); // 200ms 지연으로 PeerJS 정리 시간 확보
         }
 
         function handleMultiplayerData(data) {
@@ -8314,12 +8330,13 @@
             
             // 게임 상태 초기화
             gameState.isMultiplayer = true;
+            gameState.isNextRoundProcessing = false; // 플래그 초기화
             
             // 멀티플레이어 게임 루프 시작 (백그라운드에서도 실행)
             startMultiplayerGameLoop();
             gameState.isMenu = false;
             gameState.gameMode = 'classic'; // 멀티플레이는 클래식 모드
-            gameState.round = 1;
+            gameState.round = 0; // nextRound에서 ++ 하므로 0으로 시작
             gameState.playerWins = 0;
             gameState.enemyWins = 0;
             gameState.roundWins = [];
@@ -8403,6 +8420,9 @@
             enemy.isInvincible = false;
             enemy.hasRevived = 0;
             resetPlayerAugments(enemy);
+            
+            // 첫 라운드 시작
+            nextRound();
             
             // 카운트다운 시작
             const countdownInterval = setInterval(() => {
