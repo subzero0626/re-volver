@@ -1342,7 +1342,9 @@
             multiplayerReady: false, // 양쪽 모두 준비됨
             lastSyncTime: 0, // 마지막 동기화 시간
             explosions: [], // 폭발 이펙트 배열
-            obstacles: [] // 멀티플레이어 장애물 배열 {x, y, width, height, angle}
+            obstacles: [], // 멀티플레이어 장애물 배열 {x, y, width, height, angle}
+            roundStartTime: 0, // 라운드 시작 시간
+            lastObstacleRemoveTime: 0 // 마지막 장애물 제거 시간
         };
 
         // 튜토리얼 상태
@@ -1532,6 +1534,14 @@
             judgmentPushStartTime: 0,
             judgmentPushDuration: 0,
             hasBoomerang: false, // 부매랑
+            hasTide: false, // 해류
+            tidePhase: true, // 해류 페이즈 (true: +50%, false: -25%)
+            tideStartTime: 0, // 해류 시작 시간
+            hasOblivion: false, // 망각
+            oblivionStartTime: 0, // 망각 시작 시간 (라운드 시작 시간)
+            oblivionActivated: false, // 망각 활성화 여부
+            hasMechanization: false, // 기계화
+            hasPlunder: false, // 강탈
             isVulnerable: false, // 취약 상태
             vulnerabilityUsed: false, // 취약 사용 여부
             poisonEffects: [], // 독 효과 배열 {target, startTime, duration, damagePerSecond}
@@ -2006,9 +2016,53 @@
                 } 
             },
             { 
+                id: 'tide', 
+                name: '해류', 
+                description: '당신의 이동속도가 -25%와 +50%로 3초마다 번갈아 반복됩니다', 
+                effect: (character) => { 
+                    character.hasTide = true;
+                    character.tidePhase = true; // 시작은 +50% 페이즈
+                    character.tideStartTime = Date.now();
+                } 
+            },
+            { 
+                id: 'oblivion', 
+                name: '망각', 
+                description: '이동속도 -25%, 총알속도 -25%, 총알 데미지 -25%', 
+                effect: (character) => { 
+                    character.hasOblivion = true;
+                    character.oblivionStartTime = Date.now();
+                    character.oblivionActivated = false;
+                    // 즉시 페널티 적용
+                    character.speed *= 0.75; // 이동속도 -25%
+                    character.bulletSpeedMultiplier = (character.bulletSpeedMultiplier || 1) * 0.75; // 총알속도 -25%
+                    character.damage = (character.damage || 1) * 0.75; // 총알 데미지 -25%
+                } 
+            },
+            { 
+                id: 'mechanization', 
+                name: '기계화', 
+                description: '총알 발사 속도 +25%, 재장전시간 -1초 대신 상,하,좌,우로만 이동할 수 있습니다', 
+                effect: (character) => { 
+                    character.hasMechanization = true;
+                    character.shootCooldown *= 0.75; // 발사속도 +25% (쿨타임 25% 감소)
+                    character.reloadSpeedCount = (character.reloadSpeedCount || 0) + 1;
+                    const baseReloadTime = character.baseReloadTime || 3000;
+                    character.reloadTime = Math.max(1000, baseReloadTime - (1000 * character.reloadSpeedCount));
+                } 
+            },
+            { 
+                id: 'plunder', 
+                name: '강탈', 
+                description: '총알을 상대에게 맞출 때 마다 상대의 탄환 1개를 가져옵니다', 
+                effect: (character) => { 
+                    character.hasPlunder = true;
+                } 
+            },
+            { 
                 id: 'explosiveBullet', 
                 name: '폭발탄', 
-                description: '총알이 벽에 닿았을 때 100px 반경에 0.5 데미지', 
+                description: '총알이 벽에 닿았을 때 125px 반경에 0.5 데미지', 
                 effect: (character) => { 
                     character.hasExplosiveBullet = true;
                 } 
@@ -2950,6 +3004,41 @@
                 player.health = Math.min(player.health + (2 * recoveryContractCount), player.maxHealth);
                 player.hasRecoveryContractUsed = true;
             }
+            
+            // 해류: 이동속도가 -25%와 +50%로 3초마다 번갈아 반복
+            if (player.hasTide) {
+                if (player.tideStartTime === 0) {
+                    player.tideStartTime = now;
+                }
+                const elapsed = now - player.tideStartTime;
+                const phase = Math.floor(elapsed / 3000) % 2; // 0 또는 1 (3초마다 전환)
+                if (phase === 0) {
+                    // +50% 페이즈
+                    currentSpeed *= 1.5;
+                } else {
+                    // -25% 페이즈
+                    currentSpeed *= 0.75;
+                }
+            }
+            
+            // 망각: 30초 후 강력한 버프 활성화
+            if (player.hasOblivion && !player.oblivionActivated) {
+                if (player.oblivionStartTime === 0) {
+                    player.oblivionStartTime = now;
+                }
+                const elapsed = now - player.oblivionStartTime;
+                if (elapsed >= 30000) { // 30초 후
+                    player.oblivionActivated = true;
+                    // 총알 속도 300% 증가 (원래 속도 * 4)
+                    player.bulletSpeedMultiplier = (player.bulletSpeedMultiplier || 1) * 4;
+                    // 총알 데미지 300% 증가 (원래 데미지 * 4)
+                    player.damage = (player.damage || 1) * 4;
+                    // 최대 체력으로 회복
+                    player.health = player.maxHealth;
+                    player.displayHealth = player.maxHealth;
+                    // 글리치 효과 (시각적 효과는 draw 함수에서 처리)
+                }
+            }
 
             let dx = 0;
             let dy = 0;
@@ -2992,10 +3081,37 @@
                 dy += autoDy;
             } else {
                 // 일반 이동
-                if (keys['w']) dy -= 1;
-                if (keys['s']) dy += 1;
-                if (keys['a']) dx -= 1;
-                if (keys['d']) dx += 1;
+                // 기계화: 상하좌우로만 이동 가능
+                if (player.hasMechanization) {
+                    // 가장 가까운 방향으로 정규화
+                    let inputX = 0;
+                    let inputY = 0;
+                    if (keys['w']) inputY -= 1;
+                    if (keys['s']) inputY += 1;
+                    if (keys['a']) inputX -= 1;
+                    if (keys['d']) inputX += 1;
+                    
+                    // 상하좌우 중 가장 강한 방향으로만 이동
+                    if (Math.abs(inputX) > Math.abs(inputY)) {
+                        dx = inputX > 0 ? 1 : (inputX < 0 ? -1 : 0);
+                        dy = 0;
+                    } else if (Math.abs(inputY) > Math.abs(inputX)) {
+                        dx = 0;
+                        dy = inputY > 0 ? 1 : (inputY < 0 ? -1 : 0);
+                    } else if (inputX !== 0 || inputY !== 0) {
+                        // 같은 강도면 우선순위: 위 > 아래 > 왼쪽 > 오른쪽
+                        if (inputY < 0) { dy = -1; dx = 0; }
+                        else if (inputY > 0) { dy = 1; dx = 0; }
+                        else if (inputX < 0) { dx = -1; dy = 0; }
+                        else if (inputX > 0) { dx = 1; dy = 0; }
+                    }
+                } else {
+                    // 일반 이동
+                    if (keys['w']) dy -= 1;
+                    if (keys['s']) dy += 1;
+                    if (keys['a']) dx -= 1;
+                    if (keys['d']) dx += 1;
+                }
                 
                 // 대각선 이동 정규화
                 if (dx !== 0 && dy !== 0) {
@@ -3237,6 +3353,41 @@
                 enemy.health = Math.min(enemy.health + (2 * recoveryContractCount), enemy.maxHealth);
                 enemy.hasRecoveryContractUsed = true;
             }
+            
+            // 해류: 이동속도가 -25%와 +50%로 3초마다 번갈아 반복
+            if (enemy.hasTide) {
+                if (enemy.tideStartTime === 0) {
+                    enemy.tideStartTime = now;
+                }
+                const elapsed = now - enemy.tideStartTime;
+                const phase = Math.floor(elapsed / 3000) % 2; // 0 또는 1 (3초마다 전환)
+                if (phase === 0) {
+                    // +50% 페이즈
+                    currentSpeed *= 1.5;
+                } else {
+                    // -25% 페이즈
+                    currentSpeed *= 0.75;
+                }
+            }
+            
+            // 망각: 30초 후 강력한 버프 활성화
+            if (enemy.hasOblivion && !enemy.oblivionActivated) {
+                if (enemy.oblivionStartTime === 0) {
+                    enemy.oblivionStartTime = now;
+                }
+                const elapsed = now - enemy.oblivionStartTime;
+                if (elapsed >= 30000) { // 30초 후
+                    enemy.oblivionActivated = true;
+                    // 총알 속도 300% 증가 (원래 속도 * 4)
+                    enemy.bulletSpeedMultiplier = (enemy.bulletSpeedMultiplier || 1) * 4;
+                    // 총알 데미지 300% 증가 (원래 데미지 * 4)
+                    enemy.damage = (enemy.damage || 1) * 4;
+                    // 최대 체력으로 회복
+                    enemy.health = enemy.maxHealth;
+                    enemy.displayHealth = enemy.maxHealth;
+                    // 글리치 효과 (시각적 효과는 draw 함수에서 처리)
+                }
+            }
 
             enemy.aiTimer++;
 
@@ -3384,6 +3535,26 @@
             // 이동 계산
             let dx = Math.cos(enemy.aiDirection) * currentSpeed;
             let dy = Math.sin(enemy.aiDirection) * currentSpeed;
+            
+            // 기계화: 상하좌우로만 이동 가능
+            if (enemy.hasMechanization) {
+                // 가장 가까운 상하좌우 방향으로 정규화
+                const angle = enemy.aiDirection;
+                // 0도(우), 90도(하), 180도(좌), 270도(상) 중 가장 가까운 방향 찾기
+                const directions = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+                let closestDir = directions[0];
+                let minDiff = Math.abs(angle - directions[0]);
+                for (let i = 1; i < directions.length; i++) {
+                    const diff = Math.abs(angle - directions[i]);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestDir = directions[i];
+                    }
+                }
+                // 가장 가까운 방향으로 이동
+                dx = Math.cos(closestDir) * currentSpeed;
+                dy = Math.sin(closestDir) * currentSpeed;
+            }
             
             // 무빙워크모드: 5초마다 바뀌는 방향으로 초당 25px 이동 추가 (플레이어와 같은 방향)
             if (gameState.selectedRandomMode && gameState.selectedRandomMode.id === 'movingWork') {
@@ -3741,10 +3912,13 @@
                             
                             // 데미지 숫자 표시 (주황색)
                             target.damageNumbers.push({
-                                value: explosionDamage,
                                 x: target.x,
-                                y: target.y - target.radius - 20,
+                                y: target.y,
+                                damage: explosionDamage,
+                                isCritical: false,
                                 startTime: Date.now(),
+                                duration: 1000,
+                                offsetY: 0,
                                 color: '#ff8800'
                             });
                             
@@ -3754,6 +3928,7 @@
                     }
                     
                     character.bullets.splice(i, 1);
+                    i--; // 인덱스 조정 (역순 순회이지만 일관성을 위해)
                     continue;
                 }
 
@@ -3877,10 +4052,61 @@
                         target.weakenEndTime = Date.now() + 3000;
                     }
 
+                    // 폭발탄: 적에게 맞았을 때 폭발 처리 (데미지 적용 전)
+                    if (bullet.owner && bullet.owner.hasExplosiveBullet) {
+                        const explosionRadius = 125;
+                        const explosionDamage = 0.5;
+                        const explosionX = bullet.x;
+                        const explosionY = bullet.y;
+                        
+                        // 폭발 이펙트 추가
+                        if (!gameState.explosions) gameState.explosions = [];
+                        gameState.explosions.push({
+                            x: explosionX,
+                            y: explosionY,
+                            radius: explosionRadius,
+                            startTime: Date.now(),
+                            duration: 300
+                        });
+                        
+                        // 폭발 범위 내의 타겟에게 추가 데미지 (직접 맞은 데미지와 별도)
+                        const dx = target.x - explosionX;
+                        const dy = target.y - explosionY;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance <= explosionRadius) {
+                            // 폭발 데미지 적용 (직접 맞은 데미지와 별도)
+                            target.health = Math.max(0, target.health - explosionDamage);
+                            target.health = roundToMaxTwoDecimals(target.health);
+                            
+                            // 폭발 데미지 숫자 표시 (주황색)
+                            target.damageNumbers.push({
+                                x: target.x,
+                                y: target.y,
+                                damage: explosionDamage,
+                                isCritical: false,
+                                startTime: Date.now(),
+                                duration: 1000,
+                                offsetY: 0,
+                                color: '#ff8800'
+                            });
+                        }
+                    }
+                    
                     // 소수점 3자리 이상이면 2자리로 반올림, 1~2자리는 유지
                     finalDamage = roundToMaxTwoDecimals(finalDamage);
                     target.health -= finalDamage;
                     target.health = roundToMaxTwoDecimals(target.health);
+                    
+                    // 강탈: 총알을 상대에게 맞출 때마다 상대의 탄환 1개를 가져옴
+                    if (character.hasPlunder && !target.isReloading && target.ammo > 0) {
+                        // 상대가 재장전 중이 아니고 탄환이 있을 때만
+                        target.ammo = Math.max(0, target.ammo - 1);
+                        // 자신의 탄환을 증가 (최대 탄약수 초과 불가)
+                        if (character.ammo < character.maxAmmo) {
+                            character.ammo = Math.min(character.maxAmmo, character.ammo + 1);
+                        }
+                    }
                     
                     // 사신 증강: 적에게 총알을 맞출 시 0.4초간 은신 + 이동속도 15%
                     if (character.hasReaper && character === player) {
@@ -4543,12 +4769,12 @@
             // 승리자 증강: 라운드 시작 시 10% 확률로 즉시 승리
             if (player.hasVictor && Math.random() < 0.1) {
                 gameState.isNextRoundProcessing = false;
-                handleRoundEnd('player');
+                endRound('player');
                 return;
             }
             if (enemy.hasVictor && Math.random() < 0.1) {
                 gameState.isNextRoundProcessing = false;
-                handleRoundEnd('enemy');
+                endRound('enemy');
                 return;
             }
             
@@ -4560,6 +4786,8 @@
             resizeCanvas();
             gameState.round++;
             gameState.gameTime = 180;
+            gameState.roundStartTime = Date.now(); // 라운드 시작 시간 기록
+            gameState.lastObstacleRemoveTime = Date.now(); // 장애물 제거 시간 초기화
             gameState.showOpponentSelecting = false;
             // 2X모드 선택 카운트 초기화
             if (gameState.selectedRandomMode && gameState.selectedRandomMode.id === 'doubleAugment') {
@@ -4599,6 +4827,14 @@
             if (!gameState.isMultiplayer || gameState.round === 1) {
                 player.health = player.maxHealth;
                 player.displayHealth = player.maxHealth;
+            }
+            // 해류/망각 시작 시간 초기화
+            if (player.hasTide) {
+                player.tideStartTime = Date.now();
+            }
+            if (player.hasOblivion) {
+                player.oblivionStartTime = Date.now();
+                player.oblivionActivated = false;
             }
             player.ammo = player.maxAmmo;
             player.bullets = [];
@@ -4648,6 +4884,14 @@
             if (!gameState.isMultiplayer || gameState.round === 1) {
                 enemy.health = enemy.maxHealth;
                 enemy.displayHealth = enemy.maxHealth;
+            }
+            // 해류/망각 시작 시간 초기화
+            if (enemy.hasTide) {
+                enemy.tideStartTime = Date.now();
+            }
+            if (enemy.hasOblivion) {
+                enemy.oblivionStartTime = Date.now();
+                enemy.oblivionActivated = false;
             }
             
             // 플래그 해제 (다음 라운드 준비)
@@ -6315,6 +6559,87 @@
                     ctx.lineTo(size * 0.16, size * 0.12);
                     ctx.lineTo(size * 0.22, size * 0.16);
                     ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 'tide':
+                    // 해류: 파도 모양 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#00aaff';
+                    const tideGradient = ctx.createLinearGradient(-size * 0.3, 0, size * 0.3, 0);
+                    tideGradient.addColorStop(0, '#66ccff');
+                    tideGradient.addColorStop(0.5, '#00aaff');
+                    tideGradient.addColorStop(1, '#0088ff');
+                    ctx.fillStyle = tideGradient;
+                    // 파도 모양 (위아래로 흐르는 느낌)
+                    ctx.beginPath();
+                    ctx.moveTo(-size * 0.4, size * 0.2);
+                    ctx.quadraticCurveTo(-size * 0.2, -size * 0.1, 0, size * 0.1);
+                    ctx.quadraticCurveTo(size * 0.2, size * 0.3, size * 0.4, size * 0.1);
+                    ctx.quadraticCurveTo(size * 0.2, -size * 0.1, 0, size * 0.05);
+                    ctx.quadraticCurveTo(-size * 0.2, size * 0.25, -size * 0.4, size * 0.2);
+                    ctx.closePath();
+                    ctx.fill();
+                    break;
+                case 'oblivion':
+                    // 망각: 어두운 구름/안개 모양 (그라데이션)
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = '#6600aa';
+                    const oblivionGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.4);
+                    oblivionGradient.addColorStop(0, '#8800ff');
+                    oblivionGradient.addColorStop(0.5, '#6600aa');
+                    oblivionGradient.addColorStop(1, '#440066');
+                    ctx.fillStyle = oblivionGradient;
+                    // 안개/구름 모양 (불규칙한 원)
+                    ctx.beginPath();
+                    ctx.arc(-size * 0.15, -size * 0.1, size * 0.25, 0, Math.PI * 2);
+                    ctx.arc(size * 0.15, -size * 0.05, size * 0.2, 0, Math.PI * 2);
+                    ctx.arc(0, size * 0.15, size * 0.22, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                case 'mechanization':
+                    // 기계화: 기어/톱니바퀴 모양
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#888888';
+                    ctx.fillStyle = '#aaaaaa';
+                    ctx.strokeStyle = '#666666';
+                    ctx.lineWidth = 2;
+                    // 기어 중심 원
+                    ctx.beginPath();
+                    ctx.arc(0, 0, size * 0.2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                    // 톱니 (8개)
+                    for (let i = 0; i < 8; i++) {
+                        const angle = (i * Math.PI * 2 / 8);
+                        const x1 = Math.cos(angle) * size * 0.25;
+                        const y1 = Math.sin(angle) * size * 0.25;
+                        const x2 = Math.cos(angle) * size * 0.35;
+                        const y2 = Math.sin(angle) * size * 0.35;
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+                    break;
+                case 'plunder':
+                    // 강탈: 손 모양 (그라데이션)
+                    ctx.shadowBlur = 12;
+                    ctx.shadowColor = '#ffaa00';
+                    const plunderGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.4);
+                    plunderGradient.addColorStop(0, '#ffcc44');
+                    plunderGradient.addColorStop(1, '#ff8800');
+                    ctx.fillStyle = plunderGradient;
+                    // 손 모양 (단순화)
+                    ctx.beginPath();
+                    // 손바닥
+                    ctx.arc(0, size * 0.1, size * 0.25, 0, Math.PI * 2);
+                    ctx.fill();
+                    // 손가락들 (4개)
+                    ctx.beginPath();
+                    ctx.arc(-size * 0.15, -size * 0.1, size * 0.1, 0, Math.PI * 2);
+                    ctx.arc(-size * 0.05, -size * 0.15, size * 0.1, 0, Math.PI * 2);
+                    ctx.arc(size * 0.05, -size * 0.15, size * 0.1, 0, Math.PI * 2);
+                    ctx.arc(size * 0.15, -size * 0.1, size * 0.1, 0, Math.PI * 2);
                     ctx.fill();
                     break;
                 case 'boomerang':
@@ -8003,6 +8328,16 @@
                     }
                     break;
                     
+                case 'removeObstacle':
+                    // 호스트가 장애물을 제거했을 때 게스트도 동기화
+                    if (!isHost && typeof data.obstacleIndex === 'number') {
+                        if (gameState.obstacles && data.obstacleIndex < gameState.obstacles.length) {
+                            gameState.obstacles.splice(data.obstacleIndex, 1);
+                            gameState.lastObstacleRemoveTime = Date.now();
+                        }
+                    }
+                    break;
+                    
             }
         }
         
@@ -9320,6 +9655,26 @@
                     });
                 }
                 
+                // 망각 글리치 효과
+                if (enemy.hasOblivion && enemy.oblivionActivated) {
+                    const glitchOffset = (Math.random() - 0.5) * 3;
+                    ctx.translate(glitchOffset, 0);
+                    ctx.fillStyle = enemy.color;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.translate(-glitchOffset, 0);
+                    // 추가 글리치 레이어 (빨간색/파란색)
+                    if (Math.random() < 0.3) {
+                        ctx.fillStyle = Math.random() < 0.5 ? '#ff0000' : '#0000ff';
+                        ctx.globalAlpha = 0.3;
+                        ctx.beginPath();
+                        ctx.arc(glitchOffset * 2, 0, enemy.radius * 0.8, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.globalAlpha = 1.0;
+                    }
+                }
+                
                 ctx.beginPath();
                 ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2);
                 ctx.fillStyle = enemy.color;
@@ -9425,6 +9780,26 @@
             } else if (player.isInvisible && Date.now() < player.invisibilityEndTime) {
                 // 사신 증강: 은신 중이면 50% 투명
                 ctx.globalAlpha = 0.5;
+            }
+            
+            // 망각 글리치 효과
+            if (player.hasOblivion && player.oblivionActivated) {
+                const glitchOffset = (Math.random() - 0.5) * 3;
+                ctx.translate(glitchOffset, 0);
+                ctx.fillStyle = player.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.translate(-glitchOffset, 0);
+                // 추가 글리치 레이어 (빨간색/파란색)
+                if (Math.random() < 0.3) {
+                    ctx.fillStyle = Math.random() < 0.5 ? '#ff0000' : '#0000ff';
+                    ctx.globalAlpha = 0.3;
+                    ctx.beginPath();
+                    ctx.arc(glitchOffset * 2, 0, player.radius * 0.8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                }
             }
             
             ctx.fillStyle = player.color;
@@ -10108,6 +10483,29 @@
                 updateBullets(enemy, deltaTime);
                 updateBullets(player, deltaTime);
                 
+                // 멀티플레이어: 15초마다 장애물 제거 (호스트만 처리)
+                if (gameState.isMultiplayer && gameState.obstacles && gameState.obstacles.length > 0) {
+                    const now = Date.now();
+                    const timeSinceRoundStart = now - gameState.roundStartTime;
+                    const timeSinceLastRemove = now - gameState.lastObstacleRemoveTime;
+                    
+                    // 라운드 시작 후 15초가 지났고, 마지막 제거 후 15초가 지났으면 장애물 제거
+                    if (timeSinceRoundStart >= 15000 && timeSinceLastRemove >= 15000) {
+                        if (isHost) {
+                            // 랜덤으로 장애물 하나 제거
+                            const randomIndex = Math.floor(Math.random() * gameState.obstacles.length);
+                            gameState.obstacles.splice(randomIndex, 1);
+                            gameState.lastObstacleRemoveTime = now;
+                            
+                            // 게스트에게 장애물 제거 알림
+                            sendMultiplayerData({
+                                type: 'removeObstacle',
+                                obstacleIndex: randomIndex
+                            });
+                        }
+                    }
+                }
+                
                 // 멀티플레이어 모드일 때 플레이어 상태 전송
                 if (gameState.isMultiplayer) {
                     sendPlayerState();
@@ -10271,6 +10669,29 @@
                 
                 updateBullets(enemy, deltaTime);
                 updateBullets(player, deltaTime);
+                
+                // 멀티플레이어: 15초마다 장애물 제거 (호스트만 처리)
+                if (gameState.isMultiplayer && gameState.obstacles && gameState.obstacles.length > 0) {
+                    const now = Date.now();
+                    const timeSinceRoundStart = now - gameState.roundStartTime;
+                    const timeSinceLastRemove = now - gameState.lastObstacleRemoveTime;
+                    
+                    // 라운드 시작 후 15초가 지났고, 마지막 제거 후 15초가 지났으면 장애물 제거
+                    if (timeSinceRoundStart >= 15000 && timeSinceLastRemove >= 15000) {
+                        if (isHost) {
+                            // 랜덤으로 장애물 하나 제거
+                            const randomIndex = Math.floor(Math.random() * gameState.obstacles.length);
+                            gameState.obstacles.splice(randomIndex, 1);
+                            gameState.lastObstacleRemoveTime = now;
+                            
+                            // 게스트에게 장애물 제거 알림
+                            sendMultiplayerData({
+                                type: 'removeObstacle',
+                                obstacleIndex: randomIndex
+                            });
+                        }
+                    }
+                }
                 
                 // 멀티플레이어 모드일 때 플레이어 상태 전송
                 if (gameState.isMultiplayer) {
