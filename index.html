@@ -2337,6 +2337,52 @@
                         // 벽 경계로 위치 조정 (맵 경계 사용)
                         this.x = Math.max(gameState.mapBounds.minX + this.radius, Math.min(gameState.mapBounds.maxX - this.radius, this.x));
                         this.y = Math.max(gameState.mapBounds.minY + this.radius, Math.min(gameState.mapBounds.maxY - this.radius, this.y));
+                        
+                        // 폭발탄: 통통탄과 함께 사용 시 벽에 튕길 때마다 폭발
+                        if (this.owner && this.owner.hasExplosiveBullet) {
+                            const explosionRadius = 125;
+                            const explosionDamage = 0.5;
+                            const explosionX = this.x;
+                            const explosionY = this.y;
+                            
+                            // 폭발 이펙트 추가
+                            if (!gameState.explosions) gameState.explosions = [];
+                            gameState.explosions.push({
+                                x: explosionX,
+                                y: explosionY,
+                                radius: explosionRadius,
+                                startTime: Date.now(),
+                                duration: 300
+                            });
+                            
+                            // 폭발 범위 내의 타겟에게 데미지
+                            const target = this.owner === player ? enemy : player;
+                            const dx = target.x - explosionX;
+                            const dy = target.y - explosionY;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance <= explosionRadius) {
+                                // 데미지 적용
+                                target.health = Math.max(0, target.health - explosionDamage);
+                                target.health = roundToMaxTwoDecimals(target.health);
+                                target.displayHealth = Math.max(0, target.displayHealth - explosionDamage);
+                                
+                                // 데미지 숫자 표시 (주황색)
+                                target.damageNumbers.push({
+                                    x: target.x,
+                                    y: target.y,
+                                    damage: explosionDamage,
+                                    isCritical: false,
+                                    startTime: Date.now(),
+                                    duration: 1000,
+                                    offsetY: 0,
+                                    color: '#ff8800'
+                                });
+                                
+                                // 피격 이펙트
+                                addHitEffect(target, explosionX, explosionY);
+                            }
+                        }
                     } else {
                         this.x = nextX;
                         this.y = nextY;
@@ -3881,8 +3927,10 @@
                 }
                 
                 // 경계 체크 (멈춘 총알은 경계 체크 안 함, 부매랑 총알은 맵 밖으로 나가도 되돌아오므로 경계 체크 안 함)
-                if (!bullet.isStopped && !bullet.hasBoomerang && bullet.isOutOfBounds()) {
-                    // 폭발탄: 벽에 닿았을 때 폭발
+                // 통통탄이 있고 아직 튕길 수 있으면 Bullet 클래스의 update에서 벽 충돌 처리하므로 여기서는 체크 안 함
+                // 통통탄이 없거나 maxBounces에 도달했을 때만 여기서 처리
+                if (!bullet.isStopped && !bullet.hasBoomerang && (!bullet.hasBouncy || bullet.bounceCount >= bullet.maxBounces) && bullet.isOutOfBounds()) {
+                    // 폭발탄: 벽에 닿았을 때 폭발 (통통탄 없을 때만)
                     if (bullet.owner && bullet.owner.hasExplosiveBullet) {
                         const explosionRadius = 125;
                         const explosionDamage = 0.5;
@@ -4052,47 +4100,6 @@
                         target.weakenEndTime = Date.now() + 3000;
                     }
 
-                    // 폭발탄: 적에게 맞았을 때 폭발 처리 (데미지 적용 전)
-                    if (bullet.owner && bullet.owner.hasExplosiveBullet) {
-                        const explosionRadius = 125;
-                        const explosionDamage = 0.5;
-                        const explosionX = bullet.x;
-                        const explosionY = bullet.y;
-                        
-                        // 폭발 이펙트 추가
-                        if (!gameState.explosions) gameState.explosions = [];
-                        gameState.explosions.push({
-                            x: explosionX,
-                            y: explosionY,
-                            radius: explosionRadius,
-                            startTime: Date.now(),
-                            duration: 300
-                        });
-                        
-                        // 폭발 범위 내의 타겟에게 추가 데미지 (직접 맞은 데미지와 별도)
-                        const dx = target.x - explosionX;
-                        const dy = target.y - explosionY;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        
-                        if (distance <= explosionRadius) {
-                            // 폭발 데미지 적용 (직접 맞은 데미지와 별도)
-                            target.health = Math.max(0, target.health - explosionDamage);
-                            target.health = roundToMaxTwoDecimals(target.health);
-                            
-                            // 폭발 데미지 숫자 표시 (주황색)
-                            target.damageNumbers.push({
-                                x: target.x,
-                                y: target.y,
-                                damage: explosionDamage,
-                                isCritical: false,
-                                startTime: Date.now(),
-                                duration: 1000,
-                                offsetY: 0,
-                                color: '#ff8800'
-                            });
-                        }
-                    }
-                    
                     // 소수점 3자리 이상이면 2자리로 반올림, 1~2자리는 유지
                     finalDamage = roundToMaxTwoDecimals(finalDamage);
                     target.health -= finalDamage;
